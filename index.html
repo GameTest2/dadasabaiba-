@@ -2,241 +2,252 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>ダダサバイバー・クローン</title>
+    <title>ダダサバイバー・究極進化</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #222; font-family: 'Arial Black', sans-serif; user-select: none; }
-        canvas { display: block; background: #5a8a3d; margin: 0 auto; }
+        body { margin: 0; overflow: hidden; background: #222; font-family: 'Arial Black', sans-serif; }
+        canvas { display: block; background: #4e7a3a; }
         
-        /* 経験値バー (本家風上部バー) */
-        #exp-container { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 25px; 
-            background: rgba(0,0,0,0.5); border-bottom: 3px solid #000; z-index: 10;
-        }
-        #exp-bar-fill { width: 0%; height: 100%; background: #3498db; transition: width 0.3s; }
-        #level-badge { 
-            position: absolute; top: 2px; right: 10px; color: white; font-size: 14px; font-weight: bold;
-        }
+        /* UIレイアウト */
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; }
+        #exp-bar-container { width: 100%; height: 20px; background: #333; border-bottom: 2px solid #000; }
+        #exp-bar-fill { width: 0%; height: 100%; background: #3498db; transition: width 0.2s; }
+        #top-info { color: white; padding: 10px; text-shadow: 2px 2px #000; font-size: 18px; display: flex; justify-content: space-between; }
 
-        #stats { position: absolute; top: 35px; left: 15px; color: white; text-shadow: 2px 2px #000; font-size: 18px; }
-
-        /* スキル選択画面 */
-        #skill-menu { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: linear-gradient(180deg, #444, #111); padding: 30px; border-radius: 20px;
-            display: none; text-align: center; border: 4px solid #f1c40f; z-index: 100; min-width: 300px;
+        /* セレクター画面 */
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); display: flex; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 100; pointer-events: auto;
         }
-        .skill-option {
-            background: #fff; color: #333; padding: 20px; margin: 15px 0; border-radius: 12px;
-            cursor: pointer; border-bottom: 6px solid #bdc3c7; font-weight: bold; font-size: 20px; transition: 0.1s;
+        .card-container { display: flex; gap: 20px; }
+        .card {
+            background: #fff; border-radius: 15px; padding: 20px; width: 180px;
+            text-align: center; cursor: pointer; border-bottom: 8px solid #999;
+            transition: 0.1s; pointer-events: auto;
         }
-        .skill-option:active { transform: translateY(4px); border-bottom-width: 2px; }
-        h2 { color: #f1c40f; margin-bottom: 20px; font-size: 28px; }
+        .card:hover { transform: scale(1.05); }
+        .card:active { transform: translateY(5px); border-bottom-width: 2px; }
+        .card.weapon { background: #f1c40f; }
+        .card.skill { background: #ecf0f1; }
+        h2 { color: #f1c40f; font-size: 32px; margin-bottom: 30px; text-shadow: 3px 3px #000; }
     </style>
 </head>
 <body>
 
-<div id="exp-container"><div id="exp-bar-fill"></div><div id="level-badge">Lv.1</div></div>
-<div id="stats">KILLS: 0</div>
-
-<div id="skill-menu">
-    <h2>SKILL UP!</h2>
-    <div id="options-container"></div>
+<div id="ui-layer">
+    <div id="exp-bar-container"><div id="exp-bar-fill"></div></div>
+    <div id="top-info">
+        <div id="level-txt">Lv.1</div>
+        <div id="kill-txt">KILLS: 0</div>
+    </div>
 </div>
 
-<canvas id="gameCanvas"></canvas>
+<!-- 初期武器選択 -->
+<div id="start-screen" class="overlay">
+    <h2>武器を選択せよ</h2>
+    <div class="card-container">
+        <div class="card weapon" onclick="startGame('kunai')"><h3>クナイ</h3><p>自動追尾の弾</p></div>
+        <div class="card weapon" onclick="startGame('shotgun')"><h3>ショットガン</h3><p>扇状の強力攻撃</p></div>
+        <div class="card weapon" onclick="startGame('bat')"><h3>バット</h3><p>近接ノックバック</p></div>
+    </div>
+</div>
+
+<!-- スキル選択 -->
+<div id="skill-screen" class="overlay" style="display:none;">
+    <h2>スキルアップ！</h2>
+    <div id="skill-options" class="card-container"></div>
+</div>
+
+<canvas id="game"></canvas>
 
 <script>
-const canvas = document.getElementById('gameCanvas');
+const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-const expFill = document.getElementById('exp-bar-fill');
-const levelBadge = document.getElementById('level-badge');
-const statsEl = document.getElementById('stats');
-const skillMenu = document.getElementById('skill-menu');
-const optionsContainer = document.getElementById('options-container');
-
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-let isPaused = false;
-let score = 0;
+// --- ゲーム定数と変数 ---
+let gameState = 'start'; 
+let kills = 0;
 let level = 1;
-const MAX_ENEMIES = 100; // 同時出現上限
-
-const player = {
-    x: canvas.width/2, y: canvas.height/2, size: 22, speed: 4,
-    hp: 100, maxHp: 100, exp: 0, nextExp: 10,
-    bulletCount: 3, fireRate: 700, lastFire: 0, power: 1
-};
-
-let enemies = [];
-let bullets = [];
-let gems = [];
+const player = { x:0, y:0, hp:100, maxHp:100, exp:0, nextExp:5, speed:4, size:20 };
+const mySkills = { attack: {}, passive: {} };
+let enemies = [], bullets = [], gems = [];
 const keys = {};
 
-window.addEventListener('keydown', e => keys[e.code] = true);
-window.addEventListener('keyup', e => keys[e.code] = false);
-
-// 描画ヘルパー
-function drawEntity(x, y, size, color, type = 'box') {
-    ctx.fillStyle = color;
-    if(type === 'circle') {
-        ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI*2); ctx.fill();
-    } else {
-        ctx.fillRect(x - size/2, y - size/2, size, size);
+// --- スキルデータ定義 ---
+const SKILL_DATA = {
+    attack: {
+        kunai: { name: "クナイ", evoWith: "power", evoName: "幽霊手裏剣" },
+        shotgun: { name: "ショットガン", evoWith: "area", evoName: "ガトリング" },
+        bat: { name: "バット", evoWith: "hpMax", evoName: "ルシール" }
+    },
+    passive: {
+        power: { name: "強力銃弾", desc: "攻撃UP" },
+        hpMax: { name: "フィットネスガイド", desc: "HP上限UP" },
+        area: { name: "高性能爆薬", desc: "範囲UP" }
     }
+};
+
+// --- ゲーム開始 ---
+function startGame(weaponId) {
+    document.getElementById('start-screen').style.display = 'none';
+    player.x = canvas.width/2;
+    player.y = canvas.height/2;
+    mySkills.attack[weaponId] = 1; // 初期武器設定
+    gameState = 'play';
 }
 
-function spawnEnemy(isBoss = false) {
-    if (enemies.length >= MAX_ENEMIES && !isBoss) return;
-    const side = Math.floor(Math.random() * 4);
-    let x, y;
-    if (side === 0) { x = Math.random() * canvas.width; y = -50; }
-    else if (side === 1) { x = Math.random() * canvas.width; y = canvas.height + 50; }
-    else if (side === 2) { x = -50; y = Math.random() * canvas.height; }
-    else { x = canvas.width + 50; y = Math.random() * canvas.height; }
-    
-    enemies.push({
-        x, y, 
-        size: isBoss ? 50 : 20, 
-        hp: isBoss ? 50 + (level * 20) : 2 + Math.floor(level/2), 
-        speed: isBoss ? 2 : 1.5 + (level * 0.1),
-        isBoss,
-        color: isBoss ? '#c0392b' : '#2c3e50'
-    });
-}
-
-function fire() {
-    const now = Date.now();
-    if (now - player.lastFire < player.fireRate || enemies.length === 0) return;
-
-    let target = enemies[0];
-    let minDist = Infinity;
-    enemies.forEach(e => {
-        const d = Math.hypot(e.x - player.x, e.y - player.y);
-        if (d < minDist) { minDist = d; target = e; }
-    });
-
-    const baseAngle = Math.atan2(target.y - player.y, target.x - player.x);
-    for (let i = 0; i < player.bulletCount; i++) {
-        const angle = baseAngle + (i - (player.bulletCount - 1) / 2) * 0.2;
-        bullets.push({ x: player.x, y: player.y, vx: Math.cos(angle) * 12, vy: Math.sin(angle) * 12 });
-    }
-    player.lastFire = now;
-}
-
-const skillList = [
-    { name: "🔥 弾数 +1", act: () => player.bulletCount++ },
-    { name: "⚡ 攻撃速度 UP", act: () => player.fireRate *= 0.8 },
-    { name: "👟 移動速度 UP", act: () => player.speed += 0.6 },
-    { name: "❤️ 体力全回復", act: () => player.hp = player.maxHp },
-    { name: "💪 攻撃力 UP", act: () => player.power += 1.5 }
-];
-
-function levelUp() {
-    isPaused = true;
-    skillMenu.style.display = 'block';
-    optionsContainer.innerHTML = '';
-    const shuffled = [...skillList].sort(() => 0.5 - Math.random()).slice(0, 3);
-    shuffled.forEach(s => {
-        const div = document.createElement('div');
-        div.className = 'skill-option';
-        div.innerText = s.name;
-        div.onclick = () => {
-            s.act();
-            isPaused = false;
-            skillMenu.style.display = 'none';
-        };
-        optionsContainer.appendChild(div);
-    });
-}
-
+// --- 当たり判定フリーズ対策: シンプルな距離判定 ---
 function update() {
-    if (isPaused) return;
+    if (gameState !== 'play') return;
 
-    // 移動
-    if (keys['ArrowUp'] || keys['KeyW']) player.y -= player.speed;
-    if (keys['ArrowDown'] || keys['KeyS']) player.y += player.speed;
-    if (keys['ArrowLeft'] || keys['KeyA']) player.x -= player.speed;
-    if (keys['ArrowRight'] || keys['KeyD']) player.x += player.speed;
+    // プレイヤー移動
+    if (keys['KeyW'] || keys['ArrowUp']) player.y -= player.speed;
+    if (keys['KeyS'] || keys['ArrowDown']) player.y += player.speed;
+    if (keys['KeyA'] || keys['ArrowLeft']) player.x -= player.speed;
+    if (keys['KeyD'] || keys['ArrowRight']) player.x += player.speed;
 
-    fire();
+    // 攻撃ロジック (クナイを例に)
+    autoAttack();
 
-    // 弾更新
-    bullets.forEach((b, i) => {
-        b.x += b.vx; b.y += b.vy;
-        if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) bullets.splice(i, 1);
-    });
+    // 敵の更新（数が増えてもいいように軽量化）
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        const dist = Math.hypot(player.x - e.x, player.y - e.y);
+        
+        // プレイヤーへ追従
+        e.x += (player.x - e.x) / dist * e.speed;
+        e.y += (player.y - e.y) / dist * e.speed;
 
-    // 敵更新
-    enemies.forEach((e, i) => {
-        const angle = Math.atan2(player.y - e.y, player.x - e.x);
-        e.x += Math.cos(angle) * e.speed;
-        e.y += Math.sin(angle) * e.speed;
-
-        if (Math.hypot(e.x - player.x, e.y - player.y) < player.size) {
-            player.hp -= 0.3;
+        // ダメージ判定
+        if (dist < player.size + e.size) {
+            player.hp -= 0.2;
             if (player.hp <= 0) location.reload();
         }
 
-        bullets.forEach((b, bi) => {
-            if (Math.hypot(e.x - b.x, e.y - b.y) < e.size) {
-                e.hp -= player.power;
-                bullets.splice(bi, 1);
+        // 弾との判定
+        for (let j = bullets.length - 1; j >= 0; j--) {
+            const b = bullets[j];
+            if (Math.hypot(e.x - b.x, e.y - b.y) < e.size + 5) {
+                e.hp -= 1;
+                bullets.splice(j, 1);
                 if (e.hp <= 0) {
-                    gems.push({ x: e.x, y: e.y }); // 経験値ドロップ
+                    gems.push({x: e.x, y: e.y});
                     enemies.splice(i, 1);
-                    score++;
-                    statsEl.innerText = `KILLS: ${score}`;
-                    if (score % 20 === 0) spawnEnemy(true); // 20キル毎に中ボス
+                    kills++;
+                    document.getElementById('kill-txt').innerText = `KILLS: ${kills}`;
                 }
+                break;
             }
-        });
-    });
+        }
+    }
 
     // ジェム回収
-    gems.forEach((g, i) => {
-        const d = Math.hypot(g.x - player.x, g.y - player.y);
-        if (d < 100) { // 磁石範囲
+    for (let i = gems.length - 1; i >= 0; i--) {
+        const g = gems[i];
+        const d = Math.hypot(player.x - g.x, player.y - g.y);
+        if (d < 30) {
+            gems.splice(i, 1);
+            gainExp(1);
+        } else if (d < 150) { // 磁石効果
             g.x += (player.x - g.x) * 0.1;
             g.y += (player.y - g.y) * 0.1;
         }
-        if (d < 20) {
-            gems.splice(i, 1);
-            player.exp++;
-            if (player.exp >= player.nextExp) {
-                level++;
-                player.exp = 0;
-                player.nextExp += 8;
-                levelBadge.innerText = `Lv.${level}`;
-                levelUp();
-            }
-            expFill.style.width = `${(player.exp / player.nextExp) * 100}%`;
-        }
-    });
+    }
 
-    if (Math.random() < 0.05) spawnEnemy();
+    // 敵のスポーン（上限100体）
+    if (enemies.length < 100 && Math.random() < 0.05) spawnEnemy();
+
+    // 弾の移動
+    bullets.forEach((b, i) => {
+        b.x += b.vx; b.y += b.vy;
+        if (Math.abs(b.x - player.x) > 1000) bullets.splice(i, 1);
+    });
+}
+
+function gainExp(amt) {
+    player.exp += amt;
+    if (player.exp >= player.nextExp) {
+        player.exp = 0;
+        player.nextExp += 5;
+        level++;
+        document.getElementById('level-txt').innerText = `Lv.${level}`;
+        showSkillSelect();
+    }
+    document.getElementById('exp-bar-fill').style.width = (player.exp / player.nextExp * 100) + "%";
+}
+
+function showSkillSelect() {
+    gameState = 'pause';
+    const menu = document.getElementById('skill-screen');
+    const container = document.getElementById('skill-options');
+    menu.style.display = 'flex';
+    container.innerHTML = '';
+
+    // 本来はランダムだが、ここではデモ用にパッシブを表示
+    Object.keys(SKILL_DATA.passive).forEach(key => {
+        const s = SKILL_DATA.passive[key];
+        const card = document.createElement('div');
+        card.className = 'card skill';
+        card.innerHTML = `<h3>${s.name}</h3><p>${s.desc}</p>`;
+        card.onclick = () => {
+            mySkills.passive[key] = (mySkills.passive[key] || 0) + 1;
+            menu.style.display = 'none';
+            gameState = 'play';
+        };
+        container.appendChild(card);
+    });
+}
+
+function spawnEnemy() {
+    const angle = Math.random() * Math.PI * 2;
+    enemies.push({
+        x: player.x + Math.cos(angle) * canvas.width,
+        y: player.y + Math.sin(angle) * canvas.height,
+        size: 15, hp: 2 + Math.floor(level/3), speed: 2, color: '#333'
+    });
+}
+
+let lastFire = 0;
+function autoAttack() {
+    const now = Date.now();
+    if (now - lastFire < 800) return;
+    
+    // 武器ごとの挙動（簡易版）
+    if (mySkills.attack.kunai) {
+        const target = enemies[0];
+        if (!target) return;
+        const angle = Math.atan2(target.y - player.y, target.x - player.x);
+        bullets.push({ x: player.x, y: player.y, vx: Math.cos(angle)*10, vy: Math.sin(angle)*10 });
+    }
+    lastFire = now;
 }
 
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // 背景グリッド
-    ctx.strokeStyle = "rgba(0,0,0,0.1)";
-    for(let i=0; i<canvas.width; i+=60){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
-    for(let j=0; j<canvas.height; j+=60){ ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(canvas.width,j); ctx.stroke(); }
+    // ジェム
+    ctx.fillStyle = '#2ecc71';
+    gems.forEach(g => { ctx.beginPath(); ctx.arc(g.x, g.y, 5, 0, Math.PI*2); ctx.fill(); });
 
-    gems.forEach(g => drawEntity(g.x, g.y, 8, '#2ecc71', 'circle'));
-    bullets.forEach(b => drawEntity(b.x, b.y, 6, '#f1c40f', 'circle'));
-    enemies.forEach(e => drawEntity(e.x, e.y, e.size, e.color));
-    
-    // プレイヤー描画
-    drawEntity(player.x, player.y, player.size, '#3498db');
-    // プレイヤーHPバー
-    ctx.fillStyle = '#eee'; ctx.fillRect(player.x - 20, player.y + 25, 40, 5);
-    ctx.fillStyle = '#e74c3c'; ctx.fillRect(player.x - 20, player.y + 25, (player.hp/player.maxHp)*40, 5);
+    // 敵
+    ctx.fillStyle = '#c0392b';
+    enemies.forEach(e => { ctx.fillRect(e.x-e.size/2, e.y-e.size/2, e.size, e.size); });
+
+    // 弾
+    ctx.fillStyle = '#f1c40f';
+    bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill(); });
+
+    // プレイヤー
+    ctx.fillStyle = '#3498db';
+    ctx.fillRect(player.x-10, player.y-10, 20, 20);
 
     requestAnimationFrame(() => { update(); draw(); });
 }
+
+window.addEventListener('keydown', e => keys[e.code] = true);
+window.addEventListener('keyup', e => keys[e.code] = false);
 
 draw();
 </script>
