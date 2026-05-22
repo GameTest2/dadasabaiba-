@@ -319,7 +319,7 @@ function updateBullets() {
         if (--b.life <= 0) bullets.splice(i, 1);
     }
 }
-// --- [4/4] 進化判定・描画・メインシステム完結セクション ---
+// --- [4/4] 修正版：進化判定・描画・メインシステム完結 ---
 
 function openSkillMenu() {
     state = 'menu';
@@ -330,32 +330,25 @@ function openSkillMenu() {
 
     // 1. 進化（Red）候補の選出
     let evos = [];
-    // メイン武器の進化判定
     if (p.mainWeapon && p.mainWeapon.lv === 5) {
         if (p.pasSkills[DB.mainWeapons[p.mainWeapon.id].e]) evos.push({id: p.mainWeapon.id, type: 'main', isEvo: true});
     }
-    // 攻撃スキルの進化判定
     Object.keys(p.atkSkills).forEach(id => {
         if (p.atkSkills[id] === 5 && p.pasSkills[DB.subSkills[id].e]) evos.push({id, type: 'sub', isEvo: true});
     });
 
-    // 2. 通常アップグレード候補の選出（枠制限を考慮）
+    // 2. 通常アップグレード候補
     let normalPool = [];
-    
-    // 攻撃スキルの追加（5枠まで）またはレベルアップ
     Object.keys(DB.subSkills).forEach(id => {
         if (p.atkSkills[id] && p.atkSkills[id] < 5) normalPool.push({id, type: 'sub'});
         else if (!p.atkSkills[id] && Object.keys(p.atkSkills).length < 5) normalPool.push({id, type: 'sub'});
     });
-    // 補助スキルの追加（6枠まで）またはレベルアップ
     Object.keys(DB.passives).forEach(id => {
         if (p.pasSkills[id] && p.pasSkills[id] < 5) normalPool.push({id, type: 'pas'});
         else if (!p.pasSkills[id] && Object.keys(p.pasSkills).length < 6) normalPool.push({id, type: 'pas'});
     });
-    // メイン武器のレベルアップ
     if (p.mainWeapon && p.mainWeapon.lv < 5) normalPool.push({id: p.mainWeapon.id, type: 'main'});
 
-    // 3. 最初にメイン武器を選ぶ画面
     if (!p.mainWeapon) {
         document.getElementById('menu-title').innerText = "メイン武器を選択";
         Object.keys(DB.mainWeapons).forEach(id => addCard(id, 'main', false));
@@ -375,8 +368,8 @@ function addCard(id, type, isEvo) {
     div.innerHTML = `
         <div class="type-tag">${isEvo ? 'EVOLUTION' : type.toUpperCase()}</div>
         <h3>${isEvo ? data.r : data.n}</h3>
-        <div class="desc">${isEvo ? "究極の力を解放！" : data.d}</div>
-        <div style="font-weight:bold; margin-top:5px;">${isEvo ? '★★★★★' : 'Lv.'+(lv+1)}</div>
+        <div class="desc">${isEvo ? "究極進化！性能が激変する" : data.d}</div>
+        <div style="font-weight:bold; margin-top:5px;">${isEvo ? 'MAX' : 'Lv.'+(lv+1)}</div>
     `;
 
     div.onclick = () => {
@@ -385,8 +378,6 @@ function addCard(id, type, isEvo) {
             else p.mainWeapon.lv = isEvo ? 6 : p.mainWeapon.lv + 1;
         } else if (type === 'sub') {
             p.atkSkills[id] = isEvo ? 6 : (p.atkSkills[id] || 0) + 1;
-            // ドローン特殊合体
-            if (id === 'droneA' && isEvo) { delete p.atkSkills.droneA; delete p.atkSkills.droneB; p.atkSkills.destroyer = 6; }
         } else {
             p.pasSkills[id] = (p.pasSkills[id] || 0) + 1;
             if (id === 'hp') { p.max += 20; p.hp += 20; }
@@ -399,20 +390,39 @@ function addCard(id, type, isEvo) {
 
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // 敵描画
+    
+    // 敵の描画
     enemies.forEach(e => {
-        ctx.fillStyle = "#333"; ctx.fillRect(e.x-e.size, e.y-e.size, e.size*2, e.size*2);
-        ctx.fillStyle = "#ff4757"; ctx.fillRect(e.x-15, e.y+20, (e.hp/(6+p.lv*6))*30, 4);
+        ctx.fillStyle = "#333"; 
+        ctx.fillRect(e.x - e.size, e.y - e.size, e.size * 2, e.size * 2);
+        
+        // 敵HPバーの修正（背景グレー、前面赤）
+        const barW = 30;
+        ctx.fillStyle = "#555"; ctx.fillRect(e.x - barW/2, e.y + 20, barW, 4);
+        ctx.fillStyle = "#ff4757"; 
+        // HP割合を正しく計算 (現在HP / 初期HP)
+        const hpRatio = Math.max(0, e.hp / (6 + p.lv * 6));
+        ctx.fillRect(e.x - barW/2, e.y + 20, barW * hpRatio, 4);
     });
+
     // ジェム
     gems.forEach(g => { ctx.fillStyle="#2ecc71"; ctx.beginPath(); ctx.arc(g.x, g.y, 5, 0, 7); ctx.fill(); });
+    
     // 弾
-    bullets.forEach(b => { ctx.fillStyle=b.c; ctx.beginPath(); ctx.arc(b.x, b.y, b.s, 0, 7); ctx.fill(); });
-    // プレイヤー
-    ctx.fillStyle = "#00a8ff"; ctx.fillRect(p.x-15, p.y-15, 30, 30);
-    ctx.fillStyle = "#ff4757"; ctx.fillRect(p.x-20, p.y+22, (p.hp/p.max)*40, 6);
+    bullets.forEach(b => { 
+        ctx.fillStyle = b.c || "#fff"; 
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.s || 5, 0, 7); ctx.fill(); 
+    });
 
-    document.getElementById('exp-fill').style.width = (p.exp/p.next*100) + "%";
+    // プレイヤー
+    ctx.fillStyle = "#00a8ff"; ctx.fillRect(p.x - 15, p.y - 15, 30, 30);
+    // プレイヤーHPバー
+    ctx.fillStyle = "#333"; ctx.fillRect(p.x - 20, p.y + 22, 40, 6);
+    ctx.fillStyle = "#2ed573"; 
+    ctx.fillRect(p.x - 20, p.y + 22, Math.max(0, (p.hp / p.max) * 40), 6);
+
+    // UIテキスト
+    document.getElementById('exp-fill').style.width = (p.exp / p.next * 100) + "%";
     document.getElementById('lv-txt').innerText = `Lv.${p.lv}`;
     document.getElementById('kill-txt').innerText = `KILLS: ${kills}`;
 }
