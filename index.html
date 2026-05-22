@@ -2,219 +2,185 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>ダダサバイバー完全移植版 Part 1</title>
+    <title>ダダサバイバー完全移植版・改</title>
     <style>
         body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: 'Arial Black', sans-serif; user-select: none; }
-        canvas { display: block; background: #3d5e35; image-rendering: pixelated; }
-
-        /* GUI: 画面上部の青い経験値バー */
+        canvas { display: block; background: #3d5e35; }
         #ui { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; z-index: 100; }
-        #exp-container { width: 100%; height: 18px; background: #333; border-bottom: 3px solid #000; overflow: hidden; }
+        #exp-container { width: 100%; height: 18px; background: #333; border-bottom: 3px solid #000; }
         #exp-fill { width: 0%; height: 100%; background: #00a8ff; box-shadow: inset 0 -4px rgba(0,0,0,0.3); transition: width 0.1s; }
         #stats { display: flex; justify-content: space-between; color: white; padding: 10px 20px; text-shadow: 2px 2px #000; font-size: 22px; }
-        
-        /* オーバーレイ（メニュー・スキル選択） */
         .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 200; pointer-events: auto; }
         .card-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; max-width: 1000px; }
-        
-        /* スキルカード：通常 */
         .card { 
             background: linear-gradient(180deg, #f1c40f, #d4ac0d); border-radius: 15px; padding: 15px; width: 220px; 
             text-align: center; cursor: pointer; border: 5px solid #000; border-bottom-width: 12px; 
-            transition: transform 0.1s, filter 0.2s; color: #222; 
+            transition: transform 0.1s; color: #222; 
         }
-        .card:hover { transform: scale(1.05); filter: brightness(1.1); }
-        .card:active { transform: translateY(6px); border-bottom-width: 6px; }
-        
-        /* スキルカード：進化（赤） */
+        .card:hover { transform: scale(1.05); }
         .card.red { 
             background: linear-gradient(180deg, #ff4757, #ff6b81); color: white; 
-            border-color: #fff; animation: evo-glow 0.8s infinite alternate; 
+            border-color: #fff; animation: glow 0.8s infinite alternate; 
         }
-        @keyframes evo-glow { 
-            from { box-shadow: 0 0 10px #ff4757, inset 0 0 5px #fff; } 
-            to { box-shadow: 0 0 30px #ff6b81, inset 0 0 15px #fff; } 
-        }
-        
-        h2 { color: #f1c40f; font-size: 42px; margin-bottom: 30px; text-shadow: 4px 4px #000; letter-spacing: 2px; }
-        .card h3 { margin: 5px 0; font-size: 20px; }
-        .card .type { font-size: 12px; background: rgba(0,0,0,0.2); padding: 2px 8px; border-radius: 10px; display: inline-block; }
-        .card .desc { font-size: 13px; margin-top: 10px; font-weight: bold; background: rgba(255,255,255,0.2); padding: 8px; border-radius: 6px; min-height: 40px; }
+        @keyframes glow { from { box-shadow: 0 0 10px #ff4757; } to { box-shadow: 0 0 30px #ff6b81; } }
+        h2 { color: #f1c40f; font-size: 42px; margin-bottom: 30px; text-shadow: 4px 4px #000; }
+        .type-tag { font-size: 12px; background: rgba(0,0,0,0.2); padding: 2px 8px; border-radius: 10px; font-weight: bold; }
     </style>
 </head>
 <body>
     <div id="ui">
         <div id="exp-container"><div id="exp-fill"></div></div>
-        <div id="stats"><div id="lv-txt">Lv.1 サバイバー</div><div id="kill-txt">KILLS: 0</div></div>
+        <div id="stats"><div id="lv-txt">Lv.1</div><div id="kill-txt">KILLS: 0</div></div>
     </div>
-
-    <!-- 選択画面 -->
-    <div id="menu" class="overlay">
-        <h2 id="menu-title">武器を選択せよ</h2>
-        <div id="options" class="card-list"></div>
-    </div>
-
+    <div id="menu" class="overlay"><h2 id="menu-title">メイン武器を選択</h2><div id="options" class="card-list"></div></div>
     <canvas id="game"></canvas>
 
 <script>
-// --- [1/4] 全スキル・進化ツリー・パッシブ完全データベース ---
-const SKILLS = {
-    // 攻撃武器（n:名称, e:必要な補助, r:進化名, t:攻撃種別, d:説明）
-    atk: {
-        kunai: { n: "クナイ", e: "power", r: "幽霊手裏剣", t: "track", d: "最も近い敵を自動追尾して超高速連射する" },
-        soccer: { n: "サッカーボール", e: "shoes", r: "量子ボール", t: "bounce", d: "高速で画面内を跳ね回り敵を粉砕する" },
-        lightning: { n: "雷発生器", e: "cube", r: "ジャッジメント", t: "thunder", d: "ランダムな敵に致命的な落雷を見舞う" },
-        guardian: { n: "ガーディアン", e: "exo", r: "ディフェンダー", t: "rotate", d: "周囲を回転し敵を弾き飛ばし弾を消す" },
-        force: { n: "力場発生器", e: "drink", r: "重力場", t: "aura", d: "周囲の敵にダメージと鈍足効果を与える" },
-        drill: { n: "ドリルショット", e: "ammo", r: "ホイッスル", t: "bounce", d: "敵を貫通し跳ね返る。進化後は自動追尾" },
-        rocket: { n: "ロケット", e: "bomb", r: "シャークアタック", t: "rocket", d: "巨大ミサイルで広範囲を爆破する" },
-        molotov: { n: "火炎瓶", e: "oil", r: "燃料樽", t: "fire", d: "広範囲を炎上させ毒霧も消し去る" },
-        brick: { n: "レンガ", e: "hp", r: "鉄鉄球", t: "drop", d: "放物線を描いて投げ、進化後は全方位に貫通" },
-        laser: { n: "レーザー", e: "diffuser", r: "死の光線", t: "laser", d: "ジグザグ光線で敵を貫き鈍足化させる" },
-        boomerang: { n: "ブーメラン", e: "magnet", r: "マグネットダーツ", t: "circle", d: "戻ってくる円形の刃で敵を切り刻む" },
-        droneA: { n: "ドローンA", e: "droneB", r: "破壊者", t: "drone", d: "自動で敵を追従してミサイルを連射する" },
-        droneB: { n: "ドローンB", e: "droneA", r: "破壊者", t: "drone", d: "自動で敵を追従してミサイルを連射する" }
+// --- [1/4] 武器・スキル完全分離データベース ---
+const DB = {
+    // 【メイン武器】枠 (最初に1つだけ選ぶ)
+    mainWeapons: {
+        kunai: { n: "クナイ", e: "power", r: "幽霊手裏剣", t: "track", d: "自動追尾攻撃" },
+        shotgun: { n: "ショットガン", e: "bomb", r: "ガトリング", t: "fan", d: "前方への強力な射撃" },
+        bat: { n: "バット", e: "hp", r: "ルシール", t: "swing", d: "広範囲ノックバック攻撃" },
+        katana: { n: "カタナ", e: "armor", r: "妖刀正宗", t: "slash", d: "前後への鋭い斬撃" },
+        revolver: { n: "リボルバー", e: "power", r: "死神", t: "aim", d: "高威力の精密射撃" },
+        void: { n: "破壊の力", e: "exo", r: "新生の虚無", t: "blackhole", d: "敵を吸い込むブラックホール" },
+        light: { n: "ライトチェイサー", e: "armor", r: "不滅の灯", t: "wave", d: "巨大な剣気による広域攻撃" }
     },
-    // 補助スキル（n:名称, d:効果説明）
-    pas: {
-        power: { n: "強力銃弾", d: "攻撃力+20%。武器の威力そのものを強化" },
-        hp: { n: "フィットネスG", d: "最大HP+20%。生存力を底上げする" },
-        drink: { n: "ドリンク", d: "5秒ごとにHPを一定量回復し続ける" },
-        shoes: { n: "運動靴", d: "移動速度+10%。敵との距離を保ちやすい" },
-        exo: { n: "外骨格腕輪", d: "スキルの持続時間+20%。バリア等に有効" },
-        cube: { n: "エナジーキューブ", d: "攻撃のクールタイムを10%短縮する" },
-        magnet: { n: "強力マグネット", d: "アイテム回収範囲が大幅に拡大する" },
-        bomb: { n: "高性能爆薬", d: "攻撃の範囲とサイズを20%拡大する" },
-        ammo: { n: "弾薬推進器", d: "弾の飛ぶスピードを20%上昇させる" },
-        oil: { n: "石油債券", d: "獲得経験値・コインを20%増加させる" },
-        armor: { n: "浪人の鎧", d: "受けるダメージを10%カットする" },
-        diffuser: { n: "ディフューザー", d: "レーザー等の特定攻撃を大幅に強化する" }
+    // 【攻撃スキル】枠 (最大5つまで追加)
+    subSkills: {
+        soccer: { n: "サッカーボール", e: "shoes", r: "量子ボール", t: "bounce", d: "跳ね返る高速攻撃" },
+        lightning: { n: "雷発生器", e: "cube", r: "ジャッジメント", t: "thunder", d: "ランダム落雷" },
+        guardian: { n: "ガーディアン", e: "exo", r: "ディフェンダー", t: "rotate", d: "回転して敵を弾く" },
+        force: { n: "力場発生器", e: "drink", r: "重力場", t: "aura", d: "周囲にダメージエリア" },
+        drill: { n: "ドリルショット", e: "ammo", r: "ホイッスル", t: "bounce", d: "貫通反射ドリル" },
+        rocket: { n: "ロケット", e: "bomb", r: "シャークアタック", t: "rocket", d: "爆発ミサイル" },
+        molotov: { n: "火炎瓶", e: "oil", r: "燃料樽", t: "fire", d: "地面を燃やす" },
+        brick: { n: "レンガ", e: "hp", r: "鉄鉄球", t: "drop", d: "重量物の投下" },
+        laser: { n: "レーザー", e: "diffuser", r: "死の光線", t: "laser", d: "ジグザグ貫通光線" },
+        boomerang: { n: "ブーメラン", e: "magnet", r: "マグネットダーツ", t: "circle", d: "往復する円盤" },
+        droneA: { n: "ドローンA", e: "droneB", r: "破壊者", t: "drone", s: true },
+        droneB: { n: "ドローンB", e: "droneA", r: "破壊者", t: "drone", s: true }
+    },
+    // 【補助スキル】枠 (最大6つまで)
+    passives: {
+        power: { n: "強力銃弾", d: "攻撃力+20%" },
+        hp: { n: "フィットネスG", d: "HP上限+20%" },
+        drink: { n: "ドリンク", d: "HP継続回復" },
+        shoes: { n: "運動靴", d: "移動速度+10%" },
+        exo: { n: "外骨格腕輪", d: "持続時間+20%" },
+        cube: { n: "エナジーキューブ", d: "攻撃間隔-10%" },
+        magnet: { n: "強力マグネット", d: "回収範囲+40%" },
+        bomb: { n: "高性能爆薬", d: "攻撃範囲+20%" },
+        ammo: { n: "弾薬推進器", d: "弾速+20%" },
+        oil: { n: "石油債券", d: "獲得UP+20%" },
+        armor: { n: "浪人の鎧", d: "ダメージ軽減10%" },
+        diffuser: { n: "ディフューザー", d: "攻撃強化" }
     }
 };
 
-// Part 1終了。 Part 2 の【ゲームエンジン・移動・敵管理】に続きます。
-// --- [2/4] ゲームエンジン・プレイヤー・敵管理セクション ---
+// Part 1 終了。次は武器とスキルの所持枠を管理する【Part 2: 枠制限とゲームコア】です。
+// --- [2/4] 枠制限・インベントリ・システムセクション ---
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// ゲーム状態管理
+// ゲーム状態
 let state = 'menu'; // menu, play
 let frame = 0, kills = 0;
 
-// プレイヤー設定（パッシブスキルの補正をリアルタイム反映）
+// プレイヤー（インベントリ枠）
 const p = {
-    x: canvas.width / 2,
-    y: canvas.height / 2,
-    lv: 1,
-    exp: 0,
-    next: 5,
-    hp: 100,
-    max: 100,
-    baseSpd: 4,
-    size: 20,
-    baseMag: 100
+    x: canvas.width / 2, y: canvas.height / 2,
+    lv: 1, exp: 0, next: 5, hp: 100, max: 100,
+    baseSpd: 4, size: 20, baseMag: 100,
+    // 所持管理
+    mainWeapon: null,    // 1個固定
+    atkSkills: {},       // 最大5個
+    pasSkills: {}        // 最大6個
 };
 
-// 獲得スキル管理
-let myS = {}; 
-
-// オブジェクトプール（メモリ負荷・フリーズ対策）
 let bullets = [], enemies = [], gems = [];
 const keys = {};
 
-// キーボード制御
 window.onkeydown = e => keys[e.code] = true;
 window.onkeyup = e => keys[e.code] = false;
 
 // ---------------------------------------------------------
-// 更新メインループ
+// ゲームエンジンの更新ループ
 // ---------------------------------------------------------
 
 function update() {
     if (state !== 'play') return;
     frame++;
 
-    // 1. 移動処理（運動靴：shoes 効果反映）
-    const currentSpd = p.baseSpd * (1 + (myS.shoes || 0) * 0.1);
-    const mx = (keys['KeyD'] || keys['ArrowRight'] ? 1 : 0) - (keys['KeyA'] || keys['ArrowLeft'] ? 1 : 0);
-    const my = (keys['KeyS'] || keys['ArrowDown'] ? 1 : 0) - (keys['KeyW'] || keys['ArrowUp'] ? 1 : 0);
-    
-    if (mx !== 0 || my !== 0) {
-        const angle = Math.atan2(my, mx);
-        p.x += Math.cos(angle) * currentSpd;
-        p.y += Math.sin(angle) * currentSpd;
+    // 1. 移動（運動靴効果反映）
+    const spdMod = 1 + (p.pasSkills.shoes || 0) * 0.1;
+    const moveX = (keys['KeyD']||keys['ArrowRight']?1:0) - (keys['KeyA']||keys['ArrowLeft']?1:0);
+    const moveY = (keys['KeyS']||keys['ArrowDown']?1:0) - (keys['KeyW']||keys['ArrowUp']?1:0);
+    if (moveX !== 0 || moveY !== 0) {
+        const a = Math.atan2(moveY, moveX);
+        p.x += Math.cos(a) * p.baseSpd * spdMod;
+        p.y += Math.sin(a) * p.baseSpd * spdMod;
     }
 
-    // 2. 敵の生成（上限100体制限でブラウザのフリーズを完全に防止）
+    // 2. 敵生成（フリーズ対策：100体上限）
     if (frame % 20 === 0 && enemies.length < 100) {
         const ang = Math.random() * 6.28;
         enemies.push({
-            x: p.x + Math.cos(ang) * 800,
-            y: p.y + Math.sin(ang) * 800,
-            hp: 6 + (p.lv * 5),
-            spd: 2.2,
-            size: 18
+            x: p.x + Math.cos(ang) * 750,
+            y: p.y + Math.sin(ang) * 750,
+            hp: 6 + (p.lv * 6), spd: 2.2, size: 18
         });
     }
 
-    // 3. 敵の移動AIと衝突判定（浪人の鎧：armor 効果反映）
+    // 3. 敵AI・プレイヤー衝突（浪人の鎧反映）
+    const defMod = 1 - (p.pasSkills.armor || 0) * 0.1;
     for (let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i];
-        const dist = Math.hypot(p.x - e.x, p.y - e.y);
-        
-        // プレイヤーを追尾
-        e.x += (p.x - e.x) / dist * e.spd;
-        e.y += (p.y - e.y) / dist * e.spd;
-
-        // 被弾判定
-        if (dist < p.size + e.size) {
-            const defense = 1 - (myS.armor || 0) * 0.1;
-            p.hp -= 0.5 * defense;
-            if (p.hp <= 0) location.reload(); // 死亡リセット
+        const d = Math.hypot(p.x - e.x, p.y - e.y);
+        e.x += (p.x - e.x) / d * e.spd;
+        e.y += (p.y - e.y) / d * e.spd;
+        if (d < p.size + e.size) {
+            p.hp -= 0.5 * defMod;
+            if (p.hp <= 0) location.reload();
         }
     }
 
-    // 4. 経験値ジェム回収（強力マグネット：magnet 効果反映）
-    const magRange = p.baseMag * (1 + (myS.magnet || 0) * 0.6);
+    // 4. 経験値回収（磁石・石油債券反映）
+    const magRange = p.baseMag * (1 + (p.pasSkills.magnet || 0) * 0.5);
+    const oilMod = 1 + (p.pasSkills.oil || 0) * 0.2;
     for (let i = gems.length - 1; i >= 0; i--) {
         const g = gems[i];
-        const dist = Math.hypot(p.x - g.x, p.y - g.y);
-        
-        if (dist < magRange) {
-            g.x += (p.x - g.x) * 0.25; // 吸い寄せ
+        const d = Math.hypot(p.x - g.x, p.y - g.y);
+        if (d < magRange) {
+            g.x += (p.x - g.x) * 0.25;
             g.y += (p.y - g.y) * 0.25;
         }
-        if (dist < 20) {
+        if (d < 20) {
             gems.splice(i, 1);
-            gainExp(1);
+            p.exp += 1 * oilMod;
+            if (p.exp >= p.next) levelUp();
         }
     }
 
-    // 5. HP回復（エナジードリンク：drink 効果反映）
-    if (myS.drink && frame % 300 === 0) {
-        p.hp = Math.min(p.max, p.hp + myS.drink);
+    // 5. 回復（ドリンク反映）
+    if (p.pasSkills.drink && frame % 300 === 0) {
+        p.hp = Math.min(p.max, p.hp + p.pasSkills.drink);
     }
 
-    // 6. 全武器の攻撃実行（Part 3で定義）
-    processAttacks();
+    processWeapons(); // Part 3で定義
 }
 
-function gainExp(amount) {
-    // 石油債券：oil 効果反映
-    const bonus = 1 + (myS.oil || 0) * 0.25;
-    p.exp += amount * bonus;
-
-    if (p.exp >= p.next) {
-        p.exp = 0;
-        p.next += 12;
-        p.lv++;
-        openSkillMenu(); // Part 4で定義
-    }
+function levelUp() {
+    p.exp = 0; p.lv++; p.next += 10;
+    openSkillMenu(); // Part 4で定義
 }
 
+// ターゲット(最寄りの敵)取得
 function getTarget() {
     if (!enemies.length) return null;
     return enemies.reduce((prev, curr) => 
@@ -222,215 +188,241 @@ function getTarget() {
     );
 }
 
-// パート2終了。次は【Part 3: 30種以上の攻撃ロジック完全実装】へ進みます。
-// --- [3/4] 武器攻撃ロジック・物理演算セクション ---
+// Part 2 終了。次は武器・スキルごとの【Part 3: 固有攻撃ロジック完全実装】です。
+// --- [3/4] 武器・スキル固有攻撃ロジックセクション ---
 
-function processAttacks() {
-    Object.keys(myS).forEach(key => {
-        if (!SKILLS.atk[key]) return;
-        const lv = myS[key];
-        const isRed = lv >= 6; // 進化状態
-        
-        // クールタイム計算 (エナジーキューブ：cube 反映)
-        const baseCD = isRed ? 15 : (45 - (myS.cube || 0) * 5);
-        const cd = Math.max(5, baseCD);
+function processWeapons() {
+    // 1. メイン武器の実行
+    if (p.mainWeapon) {
+        const lv = p.mainWeapon.lv;
+        const key = p.mainWeapon.id;
+        const isRed = lv >= 6;
+        runWeaponBehavior(key, lv, isRed, true);
+    }
 
-        if (frame % cd === 0) {
-            const target = getTarget();
-            const dmg = (isRed ? 12 : 3) * (1 + (myS.power || 0) * 0.2); // 強力銃弾反映
-            const szMod = 1 + (myS.bomb || 0) * 0.25; // 高性能爆薬反映
-
-            switch(SKILLS.atk[key].t) {
-                case "track": // クナイ・手裏剣
-                    if (target) {
-                        const a = Math.atan2(target.y - p.y, target.x - p.x);
-                        spawnB(p.x, p.y, Math.cos(a)*18, Math.sin(a)*18, { dmg, c: isRed?"#fff":"#ff0", s: 6*szMod });
-                    }
-                    break;
-                case "bounce": // ドリル・サッカーボール
-                    const a = Math.random() * 6.28;
-                    spawnB(p.x, p.y, Math.cos(a)*12, Math.sin(a)*12, { 
-                        dmg, b: isRed ? 99 : 5, trk: (key==='drill' && isRed), 
-                        c: isRed ? "#f0f" : "#0ff", s: 10*szMod 
-                    });
-                    break;
-                case "drop": // レンガ・鉄球
-                    if (isRed) { // 全方位に巨大鉄球
-                        for(let i=0; i<8; i++) spawnB(p.x, p.y, Math.cos(i*0.8)*12, Math.sin(i*0.8)*12, { dmg, prc: true, c: "#888", s: 28*szMod });
-                    } else { // 放物線
-                        spawnB(p.x, p.y, (Math.random()-0.5)*12, -18, { g: 0.8, dmg, c: "#a52a2a", s: 18*szMod });
-                    }
-                    break;
-                case "rocket": // ロケット・サメ
-                    if (target) {
-                        const a = Math.atan2(target.y - p.y, target.x - p.x);
-                        spawnB(p.x, p.y, Math.cos(a)*8, Math.sin(a)*8, { 
-                            dmg, bl: isRed ? 180 : 100, c: isRed ? "#f33" : "#fb0", s: 22*szMod 
-                        });
-                    }
-                    break;
-                case "thunder": // 雷・ジャッジメント
-                    if (target) spawnB(target.x, target.y - 400, 0, 30, { dmg: 20, life: 15, c: "#ff0", s: 15*szMod });
-                    break;
-                case "fire": // 火炎瓶・燃料樽
-                    const tx = p.x + (Math.random()-0.5)*500, ty = p.y + (Math.random()-0.5)*500;
-                    spawnB(tx, ty, 0, 0, { dmg: 0.2, life: 180, c: isRed ? "#0af" : "#f50", s: (isRed ? 130 : 80)*szMod, area: true });
-                    break;
-                case "drone": // ドローンミサイル
-                    if (target) {
-                        const off = (key === 'droneA' ? 0 : Math.PI);
-                        const bx = p.x + Math.cos(frame*0.1 + off)*40;
-                        const by = p.y + Math.sin(frame*0.1 + off)*40;
-                        const a = Math.atan2(target.y - by, target.x - bx);
-                        spawnB(bx, by, Math.cos(a)*14, Math.sin(a)*14, { dmg: 2, c: "#fff", s: 5 });
-                    }
-                    break;
-            }
-        }
-        
-        // 常時更新型（回転・オーラ）
-        if (SKILLS.atk[key].t === "rotate") {
-            const cnt = isRed ? 6 : 2 + Math.floor(lv/2);
-            for(let i=0; i<cnt; i++) {
-                const ang = (frame*0.08) + (i*6.28/cnt), d = isRed ? 150 : 100;
-                spawnB(p.x+Math.cos(ang)*d, p.y+Math.sin(ang)*d, 0, 0, { dmg: 0.6, life: 1, c: "#ccc", s: (isRed?35:22)*szMod, area: true });
-            }
-        }
-        if (SKILLS.atk[key].t === "aura") {
-            const r = (isRed ? 200 : 120) * szMod;
-            ctx.fillStyle = isRed ? "rgba(0,0,0,0.25)" : "rgba(255,255,255,0.15)";
-            ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill();
-            enemies.forEach(e => { if(Math.hypot(p.x-e.x, p.y-e.y) < r) { e.hp -= 0.15; e.spd *= isRed ? 0.4 : 0.75; } });
-        }
+    // 2. 攻撃スキルの実行
+    Object.keys(p.atkSkills).forEach(key => {
+        const lv = p.atkSkills[key];
+        const isRed = lv >= 6;
+        runWeaponBehavior(key, lv, isRed, false);
     });
+
+    // 3. 弾の物理更新
+    updateBullets();
 }
 
-// 弾の生成と物理演算
+function runWeaponBehavior(key, lv, isRed, isMain) {
+    const db = isMain ? DB.mainWeapons[key] : DB.subSkills[key];
+    const cdMod = Math.max(5, (isRed ? 15 : 45) - (p.pasSkills.cube || 0) * 5);
+    const dmg = (isRed ? 10 : 3) * (1 + (p.pasSkills.power || 0) * 0.2);
+    const sz = 1 + (p.pasSkills.bomb || 0) * 0.25;
+
+    if (frame % cdMod === 0) {
+        const target = getTarget();
+        switch(db.t) {
+            case "track": // クナイ・手裏剣・ドリル(赤)
+            case "aim":   // リボルバー
+                if (target) {
+                    const a = Math.atan2(target.y - p.y, target.x - p.x);
+                    spawnB(p.x, p.y, Math.cos(a)*18, Math.sin(a)*18, { dmg, c: isRed?"#fff":"#ff0", s: 6*sz });
+                }
+                break;
+            case "fan": // ショットガン -> ガトリング(赤)
+                const baseA = target ? Math.atan2(target.y - p.y, target.x - p.x) : 0;
+                const count = isRed ? 1 : 5;
+                for(let i=0; i<count; i++) {
+                    const a = isRed ? baseA : baseA + (i-2)*0.2;
+                    spawnB(p.x, p.y, Math.cos(a)*20, Math.sin(a)*20, { dmg, c: "#fff", s: 5*sz, life: isRed?100:30 });
+                }
+                break;
+            case "bounce": // ドリル・ボール
+                const ang = Math.random() * 6.28;
+                spawnB(p.x, p.y, Math.cos(ang)*12, Math.sin(ang)*12, { dmg, b: isRed?99:5, trk: (key==='drill'&&isRed), c: isRed?"#f0f":"#0ff", s: 10*sz });
+                break;
+            case "drop": // レンガ・鉄球
+                if (isRed) {
+                    for(let i=0; i<8; i++) spawnB(p.x, p.y, Math.cos(i*0.8)*12, Math.sin(i*0.8)*12, { dmg, prc: true, c: "#888", s: 28*sz });
+                } else {
+                    spawnB(p.x, p.y, (Math.random()-0.5)*12, -18, { g: 0.8, dmg, c: "#a52a2a", s: 18*sz });
+                }
+                break;
+            case "blackhole": // 破壊の力
+                if (target) {
+                    const a = Math.atan2(target.y - p.y, target.x - p.x);
+                    spawnB(p.x, p.y, Math.cos(a)*6, Math.sin(a)*6, { dmg, life: 120, bl: isRed?200:120, c: "#000", s: 15*sz, pull: true });
+                }
+                break;
+            case "rocket": // ロケット・サメ
+                if (target) {
+                    const a = Math.atan2(target.y - p.y, target.x - p.x);
+                    spawnB(p.x, p.y, Math.cos(a)*8, Math.sin(a)*8, { dmg, bl: isRed?180:100, c: isRed?"#f33":"#fb0", s: 22*sz });
+                }
+                break;
+            case "fire": // 火炎瓶
+                const tx = p.x + (Math.random()-0.5)*500, ty = p.y + (Math.random()-0.5)*400;
+                spawnB(tx, ty, 0, 0, { dmg: 0.2, life: 150, c: isRed?"#0af":"#f50", s: (isRed?120:75)*sz, area: true });
+                break;
+        }
+    }
+
+    // ガーディアン・力場 (毎フレーム更新)
+    if (db.t === "rotate") {
+        const cnt = isRed ? 6 : 2 + Math.floor(lv/2);
+        for(let i=0; i<cnt; i++) {
+            const ang = (frame*0.08) + (i*6.28/cnt), d = isRed ? 150 : 100;
+            spawnB(p.x+Math.cos(ang)*d, p.y+Math.sin(ang)*d, 0, 0, { dmg: 0.5, life: 1, c: "#ccc", s: (isRed?35:22)*sz, area: true });
+        }
+    }
+}
+
 function spawnB(x, y, vx, vy, o) {
-    const spdMod = 1 + (myS.ammo || 0) * 0.2; // 弾薬推進器反映
-    bullets.push({ x, y, vx: vx*spdMod, vy: vy*spdMod, ...o, life: o.life || 350 });
+    const spdMod = 1 + (p.pasSkills.ammo || 0) * 0.2;
+    bullets.push({ x, y, vx: vx*spdMod, vy: vy*spdMod, ...o, life: o.life || 300 });
 }
 
-function processBullets() {
+function updateBullets() {
     for (let i = bullets.length - 1; i >= 0; i--) {
         const b = bullets[i];
-        if (b.g) b.vy += b.g; // 重力
-        if (b.trk && enemies.length) { // 自動追尾
+        if (b.g) b.vy += b.g;
+        if (b.trk && enemies.length) {
             const e = getTarget();
             const a = Math.atan2(e.y - b.y, e.x - b.x);
-            b.vx = Math.cos(a) * 16; b.vy = Math.sin(a) * 16;
+            b.vx = Math.cos(a)*16; b.vy = Math.sin(a)*16;
         }
         b.x += b.vx; b.y += b.vy;
         
-        // 跳ね返り判定
-        if (b.b && (b.x<0 || b.x>canvas.width || b.y<0 || b.y>canvas.height)) { 
-            b.vx *= -1; b.vy *= -1; b.b--; 
+        // ブラックホールの吸引
+        if (b.pull) {
+            enemies.forEach(e => {
+                if (Math.hypot(b.x-e.x, b.y-e.y) < b.s*3) {
+                    e.x += (b.x-e.x)*0.1; e.y += (b.y-e.y)*0.1;
+                }
+            });
+        }
+
+        if (b.b && (b.x<0 || b.x>canvas.width || b.y<0 || b.y>canvas.height)) {
+            b.vx *= -1; b.vy *= -1; b.b--;
         }
         
+        // 敵へのヒット判定
+        enemies.forEach(e => {
+            if (Math.hypot(e.x-b.x, e.y-b.y) < e.size + (b.s||5)) {
+                e.hp -= b.dmg;
+                if (b.bl) { // 爆発
+                    bullets.splice(i, 1);
+                    ctx.fillStyle = "rgba(255,100,0,0.5)"; ctx.beginPath(); ctx.arc(b.x, b.y, b.bl, 0, 7); ctx.fill();
+                    enemies.forEach(ne => { if(Math.hypot(b.x-ne.x, b.y-ne.y) < b.bl) ne.hp -= b.dmg; });
+                } else if (!b.prc && !b.area && !b.pull) bullets.splice(i, 1);
+            }
+        });
+
         if (--b.life <= 0) bullets.splice(i, 1);
     }
 }
-// --- [4/4] 描画・進化抽選・メインシステム完結セクション ---
+// --- [4/4] 進化判定・描画・メインシステム完結セクション ---
 
 function openSkillMenu() {
     state = 'menu';
     const m = document.getElementById('menu');
     const o = document.getElementById('options');
-    const title = document.getElementById('menu-title');
-    
     m.style.display = 'flex';
     o.innerHTML = '';
-    title.innerText = p.lv === 1 ? "武器を選択せよ" : "スキルアップ！";
 
-    // 1. 進化可能リストの作成 (武器Lv5 + 指定の補助Lv1以上)
-    let evos = Object.keys(myS).filter(k => {
-        const s = SKILLS.atk[k];
-        return s && myS[k] === 5 && myS[s.e] >= 1;
+    // 1. 進化（Red）候補の選出
+    let evos = [];
+    // メイン武器の進化判定
+    if (p.mainWeapon && p.mainWeapon.lv === 5) {
+        if (p.pasSkills[DB.mainWeapons[p.mainWeapon.id].e]) evos.push({id: p.mainWeapon.id, type: 'main', isEvo: true});
+    }
+    // 攻撃スキルの進化判定
+    Object.keys(p.atkSkills).forEach(id => {
+        if (p.atkSkills[id] === 5 && p.pasSkills[DB.subSkills[id].e]) evos.push({id, type: 'sub', isEvo: true});
     });
 
-    // 2. 抽選プールの作成 (未所持 or Lv5未満)
-    let poolAtk = Object.keys(SKILLS.atk).filter(k => !myS[k] || myS[k] < 5);
-    let poolPas = Object.keys(SKILLS.pas).filter(k => !myS[k] || myS[k] < 5);
-    let allPool = [...poolAtk, ...poolPas].sort(() => 0.5 - Math.random());
-
-    // 3. 進化を優先的に、最大3つ選出
-    let picks = [...evos, ...allPool].slice(0, 3);
-
-    picks.forEach(key => {
-        const isE = evos.includes(key);
-        const data = SKILLS.atk[key] || SKILLS.pas[key];
-        const div = document.createElement('div');
-        div.className = `card ${isE ? 'red' : ''}`;
-        
-        div.innerHTML = `
-            <div class="type">${isE ? 'EVOLUTION' : (SKILLS.atk[key] ? 'ATTACK' : 'SUPPORT')}</div>
-            <h3>${isE ? data.r : data.n}</h3>
-            <div class="desc">${isE ? "究極進化！性能が激変する" : data.d}</div>
-            <div style="font-size:12px; margin-top:5px;">${isE ? '★★★' : 'Lv.'+((myS[key]||0)+1)}</div>
-        `;
-
-        div.onclick = () => {
-            if (isE) {
-                myS[key] = 6; // 進化
-                if (key === 'droneA' || key === 'droneB') { // ドローン合体処理
-                    delete myS.droneA; delete myS.droneB; myS.destroyer = 6;
-                }
-            } else {
-                myS[key] = (myS[key] || 0) + 1;
-                if (key === 'hp') { p.max += 20; p.hp += 20; } // HP上限UP反映
-            }
-            m.style.display = 'none';
-            state = 'play';
-        };
-        o.appendChild(div);
+    // 2. 通常アップグレード候補の選出（枠制限を考慮）
+    let normalPool = [];
+    
+    // 攻撃スキルの追加（5枠まで）またはレベルアップ
+    Object.keys(DB.subSkills).forEach(id => {
+        if (p.atkSkills[id] && p.atkSkills[id] < 5) normalPool.push({id, type: 'sub'});
+        else if (!p.atkSkills[id] && Object.keys(p.atkSkills).length < 5) normalPool.push({id, type: 'sub'});
     });
+    // 補助スキルの追加（6枠まで）またはレベルアップ
+    Object.keys(DB.passives).forEach(id => {
+        if (p.pasSkills[id] && p.pasSkills[id] < 5) normalPool.push({id, type: 'pas'});
+        else if (!p.pasSkills[id] && Object.keys(p.pasSkills).length < 6) normalPool.push({id, type: 'pas'});
+    });
+    // メイン武器のレベルアップ
+    if (p.mainWeapon && p.mainWeapon.lv < 5) normalPool.push({id: p.mainWeapon.id, type: 'main'});
+
+    // 3. 最初にメイン武器を選ぶ画面
+    if (!p.mainWeapon) {
+        document.getElementById('menu-title').innerText = "メイン武器を選択";
+        Object.keys(DB.mainWeapons).forEach(id => addCard(id, 'main', false));
+    } else {
+        document.getElementById('menu-title').innerText = "スキルアップ！";
+        let picks = [...evos, ...normalPool.sort(() => 0.5 - Math.random())].slice(0, 3);
+        picks.forEach(item => addCard(item.id, item.type, item.isEvo));
+    }
 }
 
-// 描画エンジン
+function addCard(id, type, isEvo) {
+    const data = type === 'main' ? DB.mainWeapons[id] : (type === 'sub' ? DB.subSkills[id] : DB.passives[id]);
+    const div = document.createElement('div');
+    div.className = `card ${isEvo ? 'red' : ''}`;
+    let lv = type === 'main' ? (p.mainWeapon?.lv || 0) : (type === 'sub' ? (p.atkSkills[id] || 0) : (p.pasSkills[id] || 0));
+    
+    div.innerHTML = `
+        <div class="type-tag">${isEvo ? 'EVOLUTION' : type.toUpperCase()}</div>
+        <h3>${isEvo ? data.r : data.n}</h3>
+        <div class="desc">${isEvo ? "究極の力を解放！" : data.d}</div>
+        <div style="font-weight:bold; margin-top:5px;">${isEvo ? '★★★★★' : 'Lv.'+(lv+1)}</div>
+    `;
+
+    div.onclick = () => {
+        if (type === 'main') {
+            if (!p.mainWeapon) p.mainWeapon = { id, lv: 1 };
+            else p.mainWeapon.lv = isEvo ? 6 : p.mainWeapon.lv + 1;
+        } else if (type === 'sub') {
+            p.atkSkills[id] = isEvo ? 6 : (p.atkSkills[id] || 0) + 1;
+            // ドローン特殊合体
+            if (id === 'droneA' && isEvo) { delete p.atkSkills.droneA; delete p.atkSkills.droneB; p.atkSkills.destroyer = 6; }
+        } else {
+            p.pasSkills[id] = (p.pasSkills[id] || 0) + 1;
+            if (id === 'hp') { p.max += 20; p.hp += 20; }
+        }
+        document.getElementById('menu').style.display = 'none';
+        state = 'play';
+    };
+    document.getElementById('options').appendChild(div);
+}
+
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // 芝生グリッド描画
-    ctx.strokeStyle = "rgba(0,0,0,0.1)";
-    for(let x=0; x<canvas.width; x+=60) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke(); }
-    for(let y=0; y<canvas.height; y+=60) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke(); }
-
-    // ジェム描画
-    gems.forEach(g => { ctx.fillStyle="#2ecc71"; ctx.beginPath(); ctx.arc(g.x, g.y, 5, 0, 7); ctx.fill(); });
-
-    // 弾描画
-    bullets.forEach(b => { 
-        ctx.fillStyle = b.c || "#fff"; 
-        ctx.beginPath(); ctx.arc(b.x, b.y, b.s || 5, 0, 7); ctx.fill(); 
-    });
-
     // 敵描画
-    enemies.forEach(e => { 
+    enemies.forEach(e => {
         ctx.fillStyle = "#333"; ctx.fillRect(e.x-e.size, e.y-e.size, e.size*2, e.size*2);
-        // 敵HPバー
-        ctx.fillStyle = "rgba(255,0,0,0.5)"; ctx.fillRect(e.x-15, e.y+15, (e.hp/(6+p.lv*5))*30, 4);
+        ctx.fillStyle = "#ff4757"; ctx.fillRect(e.x-15, e.y+20, (e.hp/(6+p.lv*6))*30, 4);
     });
-
-    // プレイヤー描画
+    // ジェム
+    gems.forEach(g => { ctx.fillStyle="#2ecc71"; ctx.beginPath(); ctx.arc(g.x, g.y, 5, 0, 7); ctx.fill(); });
+    // 弾
+    bullets.forEach(b => { ctx.fillStyle=b.c; ctx.beginPath(); ctx.arc(b.x, b.y, b.s, 0, 7); ctx.fill(); });
+    // プレイヤー
     ctx.fillStyle = "#00a8ff"; ctx.fillRect(p.x-15, p.y-15, 30, 30);
-    // プレイヤーHPバー (足元)
-    ctx.fillStyle = "#333"; ctx.fillRect(p.x-20, p.y+22, 40, 6);
     ctx.fillStyle = "#ff4757"; ctx.fillRect(p.x-20, p.y+22, (p.hp/p.max)*40, 6);
 
-    // GUI更新
-    document.getElementById('exp-fill').style.width = (p.exp / p.next * 100) + "%";
-    document.getElementById('lv-txt').innerText = `Lv.${p.lv} サバイバー`;
+    document.getElementById('exp-fill').style.width = (p.exp/p.next*100) + "%";
+    document.getElementById('lv-txt').innerText = `Lv.${p.lv}`;
     document.getElementById('kill-txt').innerText = `KILLS: ${kills}`;
 }
 
-// メインループ起動
 function loop() {
     update();
     draw();
     requestAnimationFrame(loop);
 }
 
-// 初期化実行
 openSkillMenu();
 loop();
 </script>
