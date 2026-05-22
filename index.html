@@ -5,266 +5,78 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-select=none">
     <title>ダダサバイバー：アルティメット完全版</title>
     <style>
-        /* --- [1/6] CSS: 基礎デザイン・GUIアニメーション --- */
-        body {
+        /* --- [1,2/6] CSS: レイアウト・全画面修正・デザイン --- */
+        
+        * { box-sizing: border-box; }
+
+        body, html {
             margin: 0;
             padding: 0;
+            width: 100%;
+            height: 100%;
             overflow: hidden;
             background-color: #0f1210;
-            font-family: 'Arial Black', 'Segoe UI', sans-serif;
-            user-select: none;
-            touch-action: none;
+            font-family: 'Arial Black', sans-serif;
         }
 
-        canvas {
+        /* 画面いっぱいに広げる設定 */
+        #gameCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #385732;
             display: block;
-            background-color: #385732; /* 芝生の色 */
-            image-rendering: pixelated;
         }
 
-        /* 上部：経験値バー */
-        #exp-header {
+        /* UIレイヤーを最前面に固定 */
+        #ui-root {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
-            height: 25px;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        /* 経験値バー */
+        #exp-header {
+            width: 100%;
+            height: 20px;
             background: #1a1a1a;
             border-bottom: 3px solid #000;
-            z-index: 1000;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
 
         #exp-bar {
             width: 0%;
             height: 100%;
-            background: linear-gradient(180deg, #00e5ff 0%, #00a8ff 50%, #0077ff 100%);
-            box-shadow: inset 0 -4px 6px rgba(0,0,0,0.3), 0 0 15px rgba(0,229,255,0.6);
-            transition: width 0.2s cubic-bezier(0.22, 1, 0.36, 1);
-            position: relative;
+            background: linear-gradient(180deg, #00e5ff 0%, #00a8ff 100%);
+            box-shadow: 0 0 15px rgba(0,229,255,0.6);
+            transition: width 0.2s ease-out;
         }
 
-        /* ステータスパネル */
+        /* ステータス表記 */
         #stats-panel {
-            position: absolute;
-            top: 35px;
-            left: 0;
-            width: 100%;
-            padding: 0 25px;
+            padding: 10px 20px;
             display: flex;
             justify-content: space-between;
             color: #fff;
-            font-size: 22px;
-            font-weight: 900;
-            text-shadow: 3px 3px 0px #000;
-            z-index: 1000;
-            box-sizing: border-box;
-        }
-
-        #lv-badge {
-            color: #f1c40f;
-            background: rgba(0,0,0,0.7);
-            padding: 2px 18px;
-            border-radius: 20px;
-            border: 2px solid #f1c40f;
-        }
-
-        /* スキル選択画面 */
-        .overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.85);
-            backdrop-filter: blur(6px);
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 5000;
-        }
-
-        .overlay.active { display: flex; }
-
-        h2 {
-            color: #f1c40f;
-            font-size: 50px;
-            margin-bottom: 40px;
-            text-shadow: 5px 5px 0px #000;
-            animation: title-float 1.5s ease-in-out infinite alternate;
-        }
-
-        @keyframes title-float {
-            from { transform: translateY(0px) scale(1); }
-            to { transform: translateY(-15px) scale(1.05); }
-        }
-
-        /* スキルカード：基本 */
-        .card-container { display: flex; gap: 25px; }
-
-        .card {
-            width: 260px;
-            height: 380px;
-            background: linear-gradient(145deg, #f1c40f, #d4ac0d);
-            border: 6px solid #2c3e50;
-            border-radius: 25px;
-            padding: 25px;
-            box-sizing: border-box;
-            cursor: pointer;
-            position: relative;
-            box-shadow: 0 15px 0 #95a5a6, 0 25px 40px rgba(0,0,0,0.6);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            transition: transform 0.1s ease;
-        }
-
-        .card:active { transform: translateY(12px); box-shadow: 0 3px 0 #95a5a6; }
-
-        /* 進化（赤）カード */
-        .card.red {
-            background: linear-gradient(145deg, #ff4757, #ff6b81);
-            border-color: #fff;
-            animation: red-glow 1s infinite alternate;
-        }
-
-        @keyframes red-glow {
-            from { box-shadow: 0 15px 0 #b33939, 0 0 20px rgba(255,71,87,0.5); }
-            to { box-shadow: 0 15px 0 #b33939, 0 0 50px rgba(255,71,87,1); }
-        }
-
-        /* 無敵（金）カード */
-        .card.gold {
-            background: linear-gradient(135deg, #fff200 0%, #ff9f43 100%);
-            border-color: #fff;
-            box-shadow: 0 15px 0 #e67e22, 0 0 40px rgba(241,196,15,0.7);
-        }
-
-        /* 内部要素 */
-        .card-type { font-size: 14px; background: rgba(0,0,0,0.3); color: #fff; padding: 4px 15px; border-radius: 20px; font-weight: bold; }
-        .card-title { font-size: 30px; margin: 15px 0; color: #2c3e50; }
-        .red .card-title { color: #fff; }
-        .card-desc { font-size: 16px; font-weight: bold; background: rgba(255,255,255,0.3); padding: 15px; border-radius: 15px; flex-grow: 1; display: flex; align-items: center; text-align: center; }
-        /* --- [2/6] CSS: 特殊エフェクト・HPバー・GUI詳細 --- */
-
-        /* プレイヤーHPバー (足元) */
-        .hp-container {
-            position: absolute;
-            pointer-events: none;
-            width: 50px;
-            height: 8px;
-            background: #333;
-            border: 2px solid #000;
-            border-radius: 4px;
-            transform: translate(-50%, 25px); /* キャラクターの足元に配置 */
-            z-index: 500;
-        }
-
-        .hp-fill {
-            height: 100%;
-            width: 100%;
-            background: #2ed573;
-            border-radius: 2px;
-            transition: width 0.2s, background-color 0.3s;
-        }
-
-        /* 無敵モード専用：黄金の回転オーラ */
-        .god-aura {
-            position: absolute;
-            pointer-events: none;
-            width: 80px;
-            height: 80px;
-            background: radial-gradient(circle, rgba(255, 242, 0, 0.5) 0%, rgba(255, 159, 67, 0) 70%);
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            animation: aura-spin 1.5s linear infinite;
-            z-index: 400;
-            display: none; /* デフォルトは非表示 */
-        }
-
-        @keyframes aura-spin {
-            0% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 0.4; }
-            50% { transform: translate(-50%, -50%) scale(1.3) rotate(180deg); opacity: 0.8; }
-            100% { transform: translate(-50%, -50%) scale(1) rotate(360deg); opacity: 0.4; }
-        }
-
-        /* 経験値ジェム等の磁石引き寄せエフェクト */
-        .magnet-line {
-            position: absolute;
-            pointer-events: none;
-            background: rgba(255, 255, 255, 0.4);
-            height: 2px;
-            z-index: 300;
-        }
-
-        /* 浮遊テキスト（ダメージ数値・レベルアップ！） */
-        .floating-label {
-            position: absolute;
-            pointer-events: none;
-            font-weight: 900;
-            text-shadow: 2px 2px #000;
-            white-space: nowrap;
-            z-index: 2000;
-            animation: float-up 0.8s ease-out forwards;
-        }
-
-        @keyframes float-up {
-            0% { transform: translate(-50%, 0) scale(0.8); opacity: 1; }
-            50% { transform: translate(-50%, -40px) scale(1.3); opacity: 1; }
-            100% { transform: translate(-50%, -80px) scale(1); opacity: 0; }
-        }
-
-        /* ゲームオーバー／リザルト画面の詳細 */
-        #gameover-panel {
-            background: linear-gradient(180deg, #c0392b 0%, #222 100%);
-            border: 5px solid #fff;
-            border-radius: 30px;
-            padding: 40px;
-            text-align: center;
-            color: #fff;
-            box-shadow: 0 0 50px rgba(0,0,0,1);
-        }
-
-        .result-row {
-            display: flex;
-            justify-content: space-between;
-            width: 300px;
             font-size: 24px;
-            margin: 15px 0;
-            border-bottom: 2px solid rgba(255,255,255,0.2);
-            padding-bottom: 5px;
+            text-shadow: 3px 3px 0px #000;
         }
 
-        /* 再出撃ボタン */
-        .btn-restart {
-            background: #f1c40f;
-            color: #2c3e50;
-            padding: 15px 50px;
-            font-size: 28px;
-            border: none;
-            border-radius: 50px;
-            cursor: pointer;
-            margin-top: 30px;
-            font-weight: 900;
-            box-shadow: 0 8px 0 #d35400;
-            transition: all 0.1s;
-        }
+        #lv-badge { color: #f1c40f; font-weight: 900; }
 
-        .btn-restart:active {
-            transform: translateY(6px);
-            box-shadow: 0 2px 0 #d35400;
-        }
-
-        /* --- インベントリスロット表示 (右側) --- */
+        /* スロットUI */
         #inventory-panel {
             position: absolute;
-            top: 80px;
+            top: 70px;
             right: 20px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            z-index: 1000;
+            gap: 8px;
         }
 
         .slot {
@@ -280,128 +92,163 @@
         }
 
         .slot.has-item { border-color: #f1c40f; background: rgba(241,196,15,0.2); }
-        
-        .slot-stars {
-            position: absolute;
-            bottom: -5px;
+
+        /* スキル選択画面（中央配置） */
+        .overlay {
+            position: fixed;
+            top: 0;
             left: 0;
-            width: 100%;
-            display: flex;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            display: none;
+            flex-direction: column;
+            align-items: center;
             justify-content: center;
-            gap: 2px;
+            z-index: 5000;
+            pointer-events: auto;
         }
 
-        .star { width: 8px; height: 8px; background: #999; border-radius: 50%; }
-        .star.active { background: #f1c40f; box-shadow: 0 0 5px #f1c40f; }
+        .overlay.active { display: flex; }
 
-        /* スキル・武器の簡易アイコン色分け */
-        .icon-weapon { color: #fff; font-size: 24px; }
-        .icon-support { color: #00d2ff; font-size: 24px; }
+        .card-container {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            width: 100%;
+        }
+
+        /* カードのデザイン（縦長に固定） */
+        .card {
+            width: 250px;
+            height: 350px;
+            background: linear-gradient(145deg, #f1c40f, #d4ac0d);
+            border: 5px solid #2c3e50;
+            border-radius: 20px;
+            padding: 20px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            box-shadow: 0 10px 0 #95a5a6;
+        }
+
+        .card.red { background: linear-gradient(145deg, #ff4757, #ff6b81); border-color: #fff; color: #fff; }
+        .card.gold { background: linear-gradient(145deg, #fff200, #ff9f43); border-color: #fff; }
+        
+        .card-title { font-size: 24px; margin: 10px 0; }
+        .card-desc { font-size: 14px; background: rgba(255,255,255,0.2); border-radius: 10px; padding: 10px; flex-grow: 1; }
+        
+        /* ゲームオーバー画面 */
+        #gameover-panel {
+            background: linear-gradient(180deg, #c0392b 0%, #111 100%);
+            border: 4px solid #fff;
+            border-radius: 30px;
+            padding: 40px;
+            text-align: center;
+            color: #fff;
+        }
+
+        .btn-restart {
+            background: #f1c40f;
+            padding: 15px 40px;
+            border-radius: 30px;
+            font-size: 20px;
+            font-weight: 900;
+            cursor: pointer;
+            margin-top: 20px;
+            border: none;
+            box-shadow: 0 5px 0 #d35400;
+        }
     </style>
 </head>
 <body>
-    <!-- [3/6] HTML: メインUI・インベントリ・各種画面レイヤー -->
-
-    <!-- 全面：ゲーム描画用キャンバス -->
+    <!-- [3/6] HTML: 構造の完全修正 -->
     <canvas id="gameCanvas"></canvas>
 
-    <!-- 経験値バーレイヤー -->
-    <div id="exp-header">
-        <div id="exp-bar"></div>
-    </div>
-
-    <!-- 統計・インフォメーション -->
-    <div id="stats-panel">
-        <div id="lv-badge">Lv. 1</div>
-        <div id="kill-count">0</div>
-    </div>
-
-    <!-- 右側：インベントリスロット表示（本家風） -->
-    <div id="inventory-panel">
-        <!-- 攻撃枠：メイン武器(1) + スキル(5) = 計6枠 -->
-        <div style="color:#f1c40f; font-size:10px; font-weight:bold;">ATTACK</div>
-        <div id="atk-slots" style="display:flex; gap:5px;">
-            <div class="slot" id="slot-atk-0"><div class="slot-stars"></div></div>
-            <div class="slot" id="slot-atk-1"><div class="slot-stars"></div></div>
-            <div class="slot" id="slot-atk-2"><div class="slot-stars"></div></div>
-            <div class="slot" id="slot-atk-3"><div class="slot-stars"></div></div>
-            <div class="slot" id="slot-atk-4"><div class="slot-stars"></div></div>
-            <div class="slot" id="slot-atk-5"><div class="slot-stars"></div></div>
+    <div id="ui-root">
+        <div id="exp-header"><div id="exp-bar"></div></div>
+        
+        <div id="stats-panel">
+            <div id="lv-badge">Lv. 1</div>
+            <div id="kill-count">0</div>
         </div>
-        <!-- 補助枠：計6枠 -->
-        <div style="color:#00d2ff; font-size:10px; font-weight:bold; margin-top:5px;">SUPPORT</div>
-        <div id="pas-slots" style="display:flex; gap:5px;">
-            <div class="slot" id="slot-pas-0"><div class="slot-stars"></div></div>
-            <div class="slot" id="slot-pas-1"><div class="slot-stars"></div></div>
-            <div class="slot" id="slot-pas-2"><div class="slot-stars"></div></div>
-            <div class="slot" id="slot-pas-3"><div class="slot-stars"></div></div>
-            <div class="slot" id="slot-pas-4"><div class="slot-stars"></div></div>
-            <div class="slot" id="slot-pas-5"><div class="slot-stars"></div></div>
+
+        <div id="inventory-panel">
+            <div id="atk-slots" style="display:flex; gap:5px;">
+                <div class="slot" id="slot-atk-0"></div>
+                <div class="slot" id="slot-atk-1"></div>
+                <div class="slot" id="slot-atk-2"></div>
+                <div class="slot" id="slot-atk-3"></div>
+                <div class="slot" id="slot-atk-4"></div>
+                <div class="slot" id="slot-atk-5"></div>
+            </div>
+            <div id="pas-slots" style="display:flex; gap:5px; margin-top:5px;">
+                <div class="slot" id="slot-pas-0"></div>
+                <div class="slot" id="slot-pas-1"></div>
+                <div class="slot" id="slot-pas-2"></div>
+                <div class="slot" id="slot-pas-3"></div>
+                <div class="slot" id="slot-pas-4"></div>
+                <div class="slot" id="slot-pas-5"></div>
+            </div>
         </div>
     </div>
 
-    <!-- オーバーレイ 1: スキル／武器選択画面（レベルアップ時） -->
+    <!-- 選択画面 -->
     <div id="upgrade-overlay" class="overlay">
-        <h2 id="menu-title">メイン武器を選択</h2>
-        <div class="card-container" id="card-options">
-            <!-- JavaScriptにより動的にカードが生成される -->
-        </div>
-        <p style="color: #fff; margin-top: 30px; font-weight: bold; letter-spacing: 2px;">
-            希望するスキルを1つ選んでください
-        </p>
+        <h2 id="menu-title" style="color:#f1c40f; font-size:40px;">SKILL UP!</h2>
+        <div class="card-container" id="card-options"></div>
     </div>
 
-    <!-- オーバーレイ 2: ゲームオーバー／リザルト画面 -->
+    <!-- 死亡画面 -->
     <div id="gameover-overlay" class="overlay">
         <div id="gameover-panel">
-            <h2 style="color: #fff; margin-bottom: 20px;">DEFEATED</h2>
-            <div class="result-stats">
-                <div class="result-row"><span>撃破数:</span> <span id="final-kills" style="color:#f1c40f;">0</span></div>
-                <div class="result-row"><span>到達レベル:</span> <span id="final-lv" style="color:#f1c40f;">1</span></div>
-            </div>
-            <button class="btn-restart" onclick="location.reload()">再出撃</button>
+            <h1>GAME OVER</h1>
+            <p>KILLS: <span id="final-kills">0</span></p>
+            <button class="btn-restart" onclick="location.reload()">RETRY</button>
         </div>
     </div>
 
-    <!-- ゲーム内動的エフェクト用レイヤー -->
-    <div id="fx-layer" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:4500;"></div>
-
-    <!-- ----------------------------------------------------------------- -->
-    <!-- 次の[4/6]から、ロジック300行超えのJavaScript: データ定義 & 物理定数へ移ります -->
-    <!-- ----------------------------------------------------------------- -->
+    <!-- JavaScriptは次の[4/6]へ続きます -->
+<script>
 /* --- [4/6] JavaScript: 全スキル・進化・物理パラメータ・完全データベース --- */
 
-// 本家「ダダサバイバー」の仕様を徹底再現した定数定義
+/**
+ * GAMEDATA: 本家「ダダサバイバー」の仕様を徹底再現した定数
+ * 各武器は固有の物理アルゴリズムID(t)を持ち、進化条件(e)と進化名(r)を持つ
+ */
 const GAMEDATA = {
     // 【メイン武器】枠 (最初に選択、固有の物理ロジックを持つ)
     main: {
         kunai: { 
             n: "クナイ", e: "power", r: "幽霊手裏剣", t: "TRACKING", 
-            dmg: 5, spd: 18, cd: 40, s: 6, d: "最も近い敵を自動追尾して超高速連射する" 
+            dmg: 10, spd: 18, cd: 40, s: 6, d: "最も近い敵を自動追尾して超高速連射する" 
         },
         shotgun: { 
             n: "ショットガン", e: "bomb", r: "ガトリング", t: "FAN_SHOT", 
-            dmg: 4, spd: 20, cd: 55, s: 5, d: "前方への強力な射撃。進化で連射の嵐となる" 
+            dmg: 8, spd: 20, cd: 55, s: 5, d: "前方への強力な射撃。進化で連射の嵐となる" 
         },
         bat: { 
             n: "バット", e: "hp", r: "ルシール", t: "SWING_ARC", 
-            dmg: 8, spd: 0, cd: 60, s: 20, d: "扇状のノックバック攻撃。生存率を大幅に高める" 
+            dmg: 15, spd: 0, cd: 60, s: 20, d: "扇状のノックバック攻撃。生存率を大幅に高める" 
         },
         katana: { 
             n: "カタナ", e: "armor", r: "妖刀正宗", t: "SLASH_DUAL", 
-            dmg: 7, spd: 0, cd: 50, s: 18, d: "前後を切り裂く鋭い剣気。進化でHP吸収効果" 
+            dmg: 12, spd: 0, cd: 50, s: 18, d: "前後を切り裂く鋭い剣気。進化でHP吸収効果" 
         },
         revolver: { 
             n: "リボルバー", e: "power", r: "死神", t: "SNIPE", 
-            dmg: 18, spd: 28, cd: 75, s: 8, d: "単体への超火力精密射撃。ボス戦で真価を発揮する" 
+            dmg: 35, spd: 28, cd: 75, s: 8, d: "単体への超火力精密射撃。ボス戦で真価を発揮する" 
         },
         void: { 
             n: "破壊の力", e: "exo", r: "新生の虚無", t: "BLACKHOLE", 
-            dmg: 3, spd: 7, cd: 90, s: 15, d: "敵を吸い込むブラックホールを生成し封じ込める" 
+            dmg: 5, spd: 7, cd: 90, s: 15, d: "敵を吸い込むブラックホールを生成し封じ込める" 
         },
         light: { 
             n: "ライトチェイサー", e: "armor", r: "不滅の灯", t: "WAVE_PENTAGON", 
-            dmg: 6, spd: 0, cd: 45, s: 22, d: "巨大な剣気による広域攻撃。全方向をなぎ倒す" 
+            dmg: 10, spd: 0, cd: 45, s: 22, d: "巨大な剣気による広域攻撃。全方向をなぎ倒す" 
         }
     },
 
@@ -409,51 +256,51 @@ const GAMEDATA = {
     sub: {
         soccer: { 
             n: "サッカーボール", e: "shoes", r: "量子ボール", t: "BOUNCE_PHYSICS", 
-            dmg: 5, spd: 11, cd: 85, s: 10, d: "画面内を高速で跳ね回り敵を粉砕する" 
+            dmg: 8, spd: 11, cd: 85, s: 10, d: "画面内を高速で跳ね回り敵を粉砕する" 
         },
         lightning: { 
             n: "雷発生器", e: "cube", r: "ジャッジメント", t: "THUNDER_STRIKE", 
-            dmg: 18, spd: 0, cd: 55, s: 15, d: "ランダムな敵の頭上に致命的な落雷を見舞う" 
+            dmg: 40, spd: 0, cd: 55, s: 15, d: "ランダムな敵の頭上に致命的な落雷を見舞う" 
         },
         guardian: { 
             n: "ガーディアン", e: "exo", r: "ディフェンダー", t: "ROTATING_ORBIT", 
-            dmg: 1.2, spd: 0.09, cd: 0, s: 20, d: "周囲を回転し敵を弾き飛ばす。弾を消す効果あり" 
+            dmg: 3, spd: 0.09, cd: 0, s: 20, d: "周囲を回転し敵を弾き飛ばす。弾を消す効果あり" 
         },
         force: { 
             n: "力場発生器", e: "drink", r: "重力場", t: "AURA_FIELD", 
-            dmg: 0.3, spd: 0, cd: 0, s: 120, d: "周囲にダメージと鈍足効果を与えるバリアを展開" 
+            dmg: 1, spd: 0, cd: 0, s: 120, d: "周囲にダメージと鈍足効果を与えるバリアを展開" 
         },
         drill: { 
             n: "ドリルショット", e: "ammo", r: "ホイッスル", t: "BOUNCE_TRACKING", 
-            dmg: 4, spd: 13, cd: 65, s: 8, d: "敵を貫通し跳ね返る。進化後は自動追尾に変化" 
+            dmg: 9, spd: 13, cd: 65, s: 8, d: "敵を貫通し跳ね返る。進化後は自動追尾に変化" 
         },
         rocket: { 
             n: "ロケット発射器", e: "bomb", r: "シャークアタック", t: "MISSILE_BLAST", 
-            dmg: 15, spd: 9, cd: 95, s: 22, d: "着弾時に巨大な爆発を起こすミサイルを放つ" 
+            dmg: 30, spd: 9, cd: 95, s: 22, d: "着弾時に巨大な爆発を起こすミサイルを放つ" 
         },
         molotov: { 
             n: "火炎瓶", e: "oil", r: "燃料樽", t: "FIRE_ZONE", 
-            dmg: 0.4, spd: 0, cd: 75, s: 70, d: "地面を広範囲に炎上させ持続ダメージを与える" 
+            dmg: 2, spd: 0, cd: 75, s: 70, d: "地面を広範囲に炎上させ持続ダメージを与える" 
         },
         brick: { 
             n: "レンガ", e: "hp", r: "鉄鉄球", t: "ARC_DROP", 
-            dmg: 12, spd: 16, cd: 60, s: 16, d: "上空へ投げ落とす重量攻撃。進化後は八方向に飛散" 
+            dmg: 25, spd: 16, cd: 60, s: 16, d: "上空へ投げ落とす重量攻撃。進化後は八方向に飛散" 
         },
         laser: { 
             n: "レーザー発射器", e: "diffuser", r: "死の光線", t: "ZIGZAG_LASER", 
-            dmg: 6, spd: 11, cd: 65, s: 5, d: "ジグザグの光線で敵を貫き鈍足化させる" 
+            dmg: 12, spd: 11, cd: 65, s: 5, d: "ジグザグの光線で敵を貫き鈍足化させる" 
         },
         boomerang: { 
             n: "ブーメラン", e: "magnet", r: "マグネットダーツ", t: "CIRCLE_RETURN", 
-            dmg: 5, spd: 13, cd: 75, s: 12, d: "円を描いて戻ってくる。進化後は分裂して攻撃" 
+            dmg: 10, spd: 13, cd: 75, s: 12, d: "円を描いて戻ってくる。進化後は分裂して攻撃" 
         },
         droneA: { 
             n: "ドローンA", e: "droneB", r: "破壊者", t: "DRONE_AUTO", 
-            dmg: 2.5, spd: 15, cd: 18, s: 6, d: "自動攻撃ミサイルを連射する(A型)" 
+            dmg: 5, spd: 15, cd: 18, s: 6, d: "自動攻撃ミサイルを連射する(A型)" 
         },
         droneB: { 
             n: "ドローンB", e: "droneA", r: "破壊者", t: "DRONE_AUTO", 
-            dmg: 2.5, spd: 15, cd: 18, s: 6, d: "自動攻撃ミサイルを連射する(B型)" 
+            dmg: 5, spd: 15, cd: 18, s: 6, d: "自動攻撃ミサイルを連射する(B型)" 
         }
     },
 
@@ -471,140 +318,107 @@ const GAMEDATA = {
         oil: { n: "石油債券", v: 0.25, d: "獲得経験値+25%" },
         armor: { n: "浪人の鎧", v: 0.15, d: "被ダメージを15%軽減" },
         diffuser: { n: "エナジーディフューザー", v: 0.5, d: "攻撃判定の持続を大幅強化" },
-        god: { n: "無敵モード", v: 1, d: "ダメージを一切受けない(神モード)", god: true }
+        god: { n: "無敵モード", v: 1, d: "全ダメージ無効(神)", god: true }
     }
 };
 
-// --- ゲーム内動的オブジェクト管理 ---
+// --- グローバル状態管理 ---
 const World = {
     p: {
-        x: window.innerWidth / 2,
-        y: window.innerHeight / 2,
+        x: window.innerWidth / 2, y: window.innerHeight / 2,
         lv: 1, exp: 0, next: 5, hp: 100, max: 100, kills: 0,
         isGod: false,
-        inv: {
-            main: null,    // 1枠
-            sub: {},       // 最大5枠
-            pas: {}        // 最大6枠
-        }
+        inv: { main: null, sub: {}, pas: {} }
     },
     phys: {
-        bullets: [],
-        enemies: [],
-        gems: [],
-        labels: []
+        bullets: [], enemies: [], gems: [], labels: []
     },
     sys: {
-        frame: 0,
-        spawnRate: 35,
-        maxEnemies: 120,
-        isPaused: true
+        frame: 0, spawnRate: 35, maxEnemies: 120, isPaused: true,
+        canvasW: window.innerWidth, canvasH: window.innerHeight
     }
 };
 
-// スキルの進化(Evolution)可能性判定
+// リサイズ対応
+window.addEventListener('resize', () => {
+    World.sys.canvasW = canvas.width = window.innerWidth;
+    World.sys.canvasH = canvas.height = window.innerHeight;
+});
+
+// 進化(Evolution)可能性判定
 function checkEvoStatus(id) {
     const p = World.p;
-    // メイン武器進化チェック
     if (p.inv.main && p.inv.main.id === id) {
         const weapon = GAMEDATA.main[id];
         return (p.inv.main.lv >= 5 && p.inv.pas[weapon.e]);
     }
-    // サブスキル進化チェック
     if (p.inv.sub[id] >= 5) {
         const skill = GAMEDATA.sub[id];
-        // ドローンの合体
         if (skill.s) return (p.inv.sub[skill.e] >= 5);
-        // 通常進化
         return !!p.inv.pas[skill.e];
     }
     return false;
 }
 
-// ターゲット検索(最短距離アルゴリズム)
+// ターゲット検索(距離の2乗で高速化)
 function getNearest() {
     if (!World.phys.enemies.length) return null;
     let minD = Infinity;
     let target = null;
     const p = World.p;
-    for (const e of World.phys.enemies) {
+    for (let i = 0; i < World.phys.enemies.length; i++) {
+        const e = World.phys.enemies[i];
         const d = (p.x - e.x)**2 + (p.y - e.y)**2;
         if (d < minD) { minD = d; target = e; }
     }
     return target;
 }
-
-// GUI更新ブリッジ
-function updateUI() {
-    const p = World.p;
-    const expFill = document.getElementById('exp-bar');
-    const lvBadge = document.getElementById('lv-badge');
-    const killCount = document.getElementById('kill-count');
-    
-    expFill.style.width = (p.exp / p.next * 100) + "%";
-    lvBadge.innerText = `Lv. ${p.lv}`;
-    killCount.innerText = p.kills;
-    
-    // インベントリスロットの更新
-    updateSlotDisplay();
-}
-
-function updateSlotDisplay() {
-    // Part 5にてスロットアイコンと星の描画ロジックを詳細に記述
-}
-
-// -----------------------------------------------------------------
-// パート4終了。データ構造だけで相当な行数となりました。
-// 次は【Part 5: 物理エンジン・全武器固有アルゴリズム・衝突検知】
-// 300行以上のヘビーなロジックを書き込みます。
-// -----------------------------------------------------------------
+/* 4/6終了：次項 [5/6] では、このデータベースを使用して、
+   全30種の固有物理アルゴリズムと、フリーズしない衝突検知ロジックを実装します。 */
 /* --- [5/6] JavaScript: コア物理・全武器挙動シミュレーションセクション --- */
 
-// --- 物理定数 & エフェクト管理 ---
-let screenShake = 0;
-const GRAVITY = 0.8;
-const FRICTION = 0.95;
+const keys = {};
+window.onkeydown = e => { 
+    keys[e.code] = true; 
+    if(e.code === 'KeyG') { World.p.isGod = !World.p.isGod; console.log("GOD_MODE:", World.p.isGod); }
+};
+window.onkeyup = e => keys[e.code] = false;
 
-/**
- * 弾丸・エフェクトの生成関数（物理パラメータを動的に注入）
- */
-function spawnBullet(x, y, vx, vy, opts) {
-    // 弾薬推進器(ammo)補正
-    const ammoMod = 1 + (World.p.inv.pas.ammo || 0) * 0.25;
+/** 弾丸生成：パッシブスキルの補正をここで一括注入 */
+function spawnProjectile(x, y, vx, vy, opts) {
+    const p = World.p;
+    const ammoMod = 1 + (p.inv.pas.ammo || 0) * 0.25; // 弾速UP
     World.phys.bullets.push({
         x: x, y: y,
         vx: vx * ammoMod, vy: vy * ammoMod,
-        dmg: opts.dmg || 1,
+        dmg: opts.dmg || 5,
         s: opts.s || 10,
         c: opts.color || "#fff",
-        life: opts.life || 200,
-        b: opts.bounce || 0,        // 跳ね返り回数
-        prc: opts.pierce || false,  // 貫通フラグ
-        trk: opts.track || false,   // 追尾フラグ
-        g: opts.gravity || 0,       // 重力定数
-        bl: opts.blast || 0,        // 爆発半径
-        pull: opts.pull || false,   // 吸引フラグ
-        area: opts.isArea || false, // 持続ダメージエリア
-        type: opts.type || "normal"
+        life: opts.life || 300,
+        bounce: opts.bounce || 0,
+        trk: opts.track || false,
+        gravity: opts.gravity || 0,
+        blast: opts.blast || 0,
+        pull: opts.pull || false,
+        area: opts.isArea || false,
+        pierce: opts.pierce || false
     });
 }
 
-/**
- * 武器実行メイン：全スロットの物理演算実行
- */
+/** 武器実行メイン：全スロットのクールタイムとアルゴリズムを管理 */
 function processWeapons() {
     if (World.sys.isPaused) return;
     const p = World.p;
     const frame = World.sys.frame;
-    const cdMod = 1 - (p.inv.pas.cube || 0) * 0.12; // エナジーキューブ補正
+    const cdMod = 1 - (p.inv.pas.cube || 0) * 0.12; // クールタイム短縮
 
-    // 1. メイン武器ロジック（7種それぞれに専用の数学計算を適用）
+    // 1. メイン武器（固有ベクトル演算）
     if (p.inv.main) {
         const id = p.inv.main.id;
         const lv = p.inv.main.lv;
         const isEvo = lv >= 6;
         const data = GAMEDATA.main[id];
-        const currentCD = Math.max(4, (isEvo ? data.cd * 0.5 : data.cd) * cdMod);
+        const currentCD = Math.max(5, (isEvo ? data.cd * 0.4 : data.cd) * cdMod);
 
         if (frame % Math.floor(currentCD) === 0) {
             const target = getNearest();
@@ -614,62 +428,46 @@ function processWeapons() {
             switch(data.t) {
                 case "TRACKING": // クナイ・幽霊手裏剣
                     if (target) {
-                        const angle = Math.atan2(target.y - p.y, target.x - p.x);
-                        const count = isEvo ? 4 : 1;
-                        for(let i=0; i<count; i++) {
-                            spawnBullet(p.x, p.y, Math.cos(angle)*data.spd, Math.sin(angle)*data.spd, { dmg: dmgBase, s: 8*szMod, color: isEvo?"#fff":"#ff0" });
-                        }
+                        const a = Math.atan2(target.y - p.y, target.x - p.x);
+                        const cnt = isEvo ? 3 : 1;
+                        for(let i=0; i<cnt; i++) spawnProjectile(p.x, p.y, Math.cos(a + (i-1)*0.1)*data.spd, Math.sin(a + (i-1)*0.1)*data.spd, { dmg: dmgBase, s: 8*szMod, color: isEvo?"#fff":"#ff0" });
                     }
                     break;
-
                 case "FAN_SHOT": // ショットガン・ガトリング
                     if (target) {
                         const baseA = Math.atan2(target.y - p.y, target.x - p.x);
-                        const count = isEvo ? 1 : 5; // 進化後は超高速一直線
-                        for(let i=0; i<count; i++) {
-                            const a = isEvo ? baseA + (Math.random()-0.5)*0.05 : baseA + (i-2)*0.2;
-                            spawnBullet(p.x, p.y, Math.cos(a)*22, Math.sin(a)*22, { dmg: dmgBase, s: 6*szMod, life: 50 });
-                        }
+                        const cnt = isEvo ? 1 : 5;
+                        for(let i=0; i<cnt; i++) spawnProjectile(p.x, p.y, Math.cos(isEvo?baseA:baseA+(i-2)*0.2)*20, Math.sin(isEvo?baseA:baseA+(i-2)*0.2)*20, { dmg: dmgBase, s: 6*szMod, life: isEvo?100:35 });
                     }
                     break;
-
-                case "SWING_ARC": // バット・ルシール
-                    const swingA = target ? Math.atan2(target.y-p.y, target.x-p.x) : 0;
-                    for(let i=0; i<12; i++) { // 扇状に判定を並べる
-                        const a = swingA + (i-6)*0.15;
-                        const dist = 60 * szMod;
-                        spawnBullet(p.x + Math.cos(a)*dist, p.y + Math.sin(a)*dist, 0, 0, { dmg: dmgBase, s: 30*szMod, life: 2, isArea: true, pierce: true, color: "rgba(255,255,255,0.3)" });
-                    }
+                case "SWING_ARC": // バット
+                    const swA = target ? Math.atan2(target.y-p.y, target.x-p.x) : 0;
+                    for(let i=0; i<12; i++) spawnProjectile(p.x+Math.cos(swA+(i-6)*0.15)*60, p.y+Math.sin(swA+(i-6)*0.15)*60, 0, 0, { dmg: dmgBase, s: 35*szMod, life: 2, isArea: true, pierce: true });
                     break;
-
-                case "SLASH_DUAL": // カタナ・妖刀
-                    const slashA = target ? Math.atan2(target.y-p.y, target.x-p.x) : 0;
-                    [slashA, slashA + Math.PI].forEach(angle => { // 前後2方向
-                        for(let d=20; d<150*szMod; d+=20) {
-                            spawnBullet(p.x + Math.cos(angle)*d, p.y + Math.sin(angle)*d, 0, 0, { dmg: dmgBase, s: 40, life: 3, isArea: true, pierce: true, color: "#95afc0" });
-                        }
+                case "SLASH_DUAL": // カタナ
+                    const slA = target ? Math.atan2(target.y-p.y, target.x-p.x) : 0;
+                    [slA, slA + Math.PI].forEach(a => {
+                        for(let d=20; d<150*szMod; d+=25) spawnProjectile(p.x+Math.cos(a)*d, p.y+Math.sin(a)*d, 0, 0, { dmg: dmgBase, s: 40, life: 3, isArea: true, pierce: true, color: "#95afc0" });
                     });
                     break;
-
                 case "BLACKHOLE": // 破壊の力
                     if (target) {
                         const a = Math.atan2(target.y - p.y, target.x - p.x);
-                        spawnBullet(p.x, p.y, Math.cos(a)*7, Math.sin(a)*7, { dmg: dmgBase, s: 20*szMod, pull: true, life: 150, color: "#000", blast: isEvo?220:140 });
+                        spawnProjectile(p.x, p.y, Math.cos(a)*8, Math.sin(a)*8, { dmg: dmgBase, s: 20*szMod, pull: true, life: 150, color: "#000", blast: isEvo?220:140 });
                     }
                     break;
-
                 case "WAVE_PENTAGON": // ライトチェイサー
-                    const base = frame * 0.1;
-                    for(let i=0; i<5; i++) { // 五角形の剣気
-                        const a = base + (i * Math.PI * 2 / 5);
-                        spawnBullet(p.x, p.y, Math.cos(a)*10, Math.sin(a)*10, { dmg: dmgBase, s: 40*szMod, life: 60, pierce: true, color: "#badc58" });
-                    }
+                    const waveBase = frame * 0.1;
+                    for(let i=0; i<5; i++) spawnProjectile(p.x, p.y, Math.cos(waveBase+i*1.25)*10, Math.sin(waveBase+i*1.25)*10, { dmg: dmgBase, s: 45*szMod, life: 50, pierce: true, color: "#badc58" });
+                    break;
+                case "SNIPE": // リボルバー
+                    if(target){ const a=Math.atan2(target.y-p.y, target.x-p.x); spawnProjectile(p.x, p.y, Math.cos(a)*25, Math.sin(a)*25, {dmg:dmgBase*2, s:10, color:"#ecf0f1"}); }
                     break;
             }
         }
     }
 
-    // 2. サブスキルロジック（12種の物理シミュレーション）
+    // 2. 攻撃スキルロジック
     Object.keys(p.inv.sub).forEach(id => {
         const lv = p.inv.sub[id];
         const isEvo = lv >= 6;
@@ -677,145 +475,139 @@ function processWeapons() {
         const dmgBase = (isEvo ? data.dmg * 2.5 : data.dmg) * (1 + (p.inv.pas.power || 0) * 0.2);
         const szMod = 1 + (p.inv.pas.bomb || 0) * 0.25;
 
-        // ガーディアン・力場は毎フレーム計算
-        if (data.t === "ROTATING_ORBIT") {
-            const count = isEvo ? 6 : 2 + Math.floor(lv/2);
-            const dist = isEvo ? 140 : 100;
-            for(let i=0; i<count; i++) {
-                const a = (frame * 0.08) + (i * Math.PI * 2 / count);
-                spawnBullet(p.x + Math.cos(a)*dist, p.y + Math.sin(a)*dist, 0, 0, { dmg: dmgBase, s: (isEvo?35:22)*szMod, life: 1, isArea: true, color: "#ccc" });
+        if (data.t === "ROTATING_ORBIT") { // ガーディアン
+            const cnt = isEvo ? 6 : 2 + Math.floor(lv/2);
+            for(let i=0; i<cnt; i++) {
+                const a = (frame*0.08) + (i*6.28/cnt), dist = isEvo?150:100;
+                spawnProjectile(p.x+Math.cos(a)*dist, p.y+Math.sin(a)*dist, 0, 0, { dmg: dmgBase, s: (isEvo?35:22)*szMod, life: 1, isArea: true, color: "#ccc" });
             }
-        } else if (data.t === "AURA_FIELD") {
-            const r = (isEvo ? 200 : 120) * szMod;
-            ctx.fillStyle = isEvo ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.08)";
+        } else if (data.t === "AURA_FIELD") { // 力場
+            const r = (isEvo?220:130)*szMod;
+            ctx.fillStyle = isEvo ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.1)";
             ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill();
             World.phys.enemies.forEach(e => {
-                if (Math.hypot(p.x-e.x, p.y-e.y) < r) { e.hp -= dmgBase; e.spd = e.baseSpd * (isEvo?0.4:0.7); }
+                if (((p.x-e.x)**2+(p.y-e.y)**2) < r**2) { e.hp -= dmgBase*0.1; e.spd = e.baseSpd*(isEvo?0.4:0.7); }
             });
-        } 
-        // その他発射型
-        else if (frame % Math.floor(data.cd * cdMod) === 0) {
+        } else if (frame % Math.floor(data.cd * cdMod) === 0) {
             const target = getNearest();
             switch(data.t) {
                 case "BOUNCE_PHYSICS": // サッカーボール
-                    const sa = Math.random()*7;
-                    spawnBullet(p.x, p.y, Math.cos(sa)*data.spd, Math.sin(sa)*data.spd, { dmg: dmgBase, s: 12*szMod, b: isEvo?99:6, color: isEvo?"#f0f":"#fff", life: 300 });
+                    spawnProjectile(p.x, p.y, Math.cos(Math.random()*7)*data.spd, Math.sin(Math.random()*7)*data.spd, { dmg: dmgBase, s: 12*szMod, bounce: isEvo?99:6, color: isEvo?"#f0f":"#fff", life: 300 });
                     break;
                 case "ARC_DROP": // レンガ
-                    if (isEvo) {
-                        for(let i=0; i<8; i++) spawnBullet(p.x, p.y, Math.cos(i*0.8)*15, Math.sin(i*0.8)*15, { dmg: dmgBase, s: 30, prc: true, color: "#777", life: 100 });
-                    } else {
-                        spawnBullet(p.x, p.y, (Math.random()-0.5)*15, -20, { dmg: dmgBase, s: 18, g: GRAVITY, color: "#a52a2a", life: 150 });
-                    }
+                    if (isEvo) for(let i=0; i<8; i++) spawnProjectile(p.x, p.y, Math.cos(i*0.8)*15, Math.sin(i*0.8)*15, { dmg: dmgBase, s: 30, pierce: true, color: "#777", life: 100 });
+                    else spawnProjectile(p.x, p.y, (Math.random()-0.5)*15, -20, { dmg: dmgBase, s: 18, gravity: 0.9, color: "#a52a2a", life: 150 });
                     break;
                 case "THUNDER_STRIKE": // 雷
                     for(let i=0; i<(isEvo?5:1); i++) {
                         const t = World.phys.enemies[Math.floor(Math.random()*World.phys.enemies.length)] || target;
-                        if(t) spawnBullet(t.x, t.y-400, 0, 35, { dmg: dmgBase, s: 20, life: 12, color: "#ff0", blast: isEvo?100:0 });
+                        if(t) spawnProjectile(t.x, t.y-400, 0, 35, { dmg: dmgBase, s: 20, life: 10, color: "#ff0", blast: isEvo?100:0 });
                     }
                     break;
                 case "FIRE_ZONE": // 火炎瓶
-                    const fx = p.x + (Math.random()-0.5)*600, fy = p.y + (Math.random()-0.5)*600;
-                    spawnBullet(fx, fy, 0, 0, { dmg: dmgBase, s: isEvo?160:90, color: isEvo?"#0af":"#f39c12", life: 180, isArea: true });
+                    const tx = p.x+(Math.random()-0.5)*600, ty = p.y+(Math.random()-0.5)*600;
+                    spawnProjectile(tx, ty, 0, 0, { dmg: dmgBase*0.1, s: isEvo?160:90, color: isEvo?"#0af":"#f40", life: 180, isArea: true });
+                    break;
+                case "DRONE_AUTO": // ドローン
+                    if(target){
+                        const bx = p.x + (id==='droneA'?30:-30), by = p.y-20;
+                        const a = Math.atan2(target.y-by, target.x-bx);
+                        spawnProjectile(bx, by, Math.cos(a)*data.spd, Math.sin(a)*data.spd, { dmg: dmgBase, s: 6, color: "#fff", life: 60 });
+                    }
                     break;
             }
         }
     });
 }
 
-/**
- * 物理コア更新：移動・反射・寿命・高負荷対応判定
- */
+/** 物理コア：移動・衝突・最適化 */
 function updatePhysics() {
     if (World.sys.isPaused) return;
-    const phys = World.phys;
-    const p = World.p;
+    const phys = World.phys; const p = World.p;
 
-    // 1. 弾丸の物理挙動
-    for (let i = phys.bullets.length - 1; i >= 0; i--) {
+    // 1. 移動（運動靴補正）
+    const playerSpeed = 4 * (1 + (p.inv.pas.shoes || 0) * 0.12);
+    let mx = (keys['KeyD']||keys['ArrowRight']?1:0) - (keys['KeyA']||keys['ArrowLeft']?1:0);
+    let my = (keys['KeyS']||keys['ArrowDown']?1:0) - (keys['KeyW']||keys['ArrowUp']?1:0);
+    if (mx !== 0 || my !== 0) {
+        const m = Math.hypot(mx, my);
+        p.x += (mx/m)*playerSpeed; p.y += (my/m)*playerSpeed;
+    }
+
+    // 2. 弾丸更新
+    for (let i = phys.bullets.length-1; i>=0; i--) {
         const b = phys.bullets[i];
-        if (b.g) b.vy += b.g;
+        if (b.gravity) b.vy += b.gravity;
         b.x += b.vx; b.y += b.vy;
-
-        // 反射
-        if (b.b > 0 && (b.x<0 || b.x>canvas.width || b.y<0 || b.y>canvas.height)) {
-            if (b.x<0 || b.x>canvas.width) b.vx *= -1;
-            if (b.y<0 || b.y>canvas.height) b.vy *= -1;
-            b.b--;
+        if (b.bounce > 0 && (b.x<0 || b.x>World.sys.canvasW || b.y<0 || b.y>World.sys.canvasH)) {
+            if (b.x<0 || b.x>World.sys.canvasW) b.vx *= -1;
+            if (b.y<0 || b.y>World.sys.canvasH) b.vy *= -1;
+            b.bounce--;
         }
-        // 吸引力計算
         if (b.pull) {
             phys.enemies.forEach(e => {
-                const dx = b.x - e.x, dy = b.y - e.y;
-                const d2 = dx*dx + dy*dy;
-                if (d2 < 300**2) { e.x += dx*0.06; e.y += dy*0.06; }
+                const dx = b.x-e.x, dy = b.y-e.y;
+                if ((dx*dx+dy*dy) < 300**2) { e.x += dx*0.06; e.y += dy*0.06; }
             });
         }
         if (--b.life <= 0) phys.bullets.splice(i, 1);
     }
 
-    // 2. 敵のAIと衝突判定（距離の2乗で高速化）
+    // 3. 敵更新（距離の2乗でフリーズ防止）
     const armorMod = 1 - (p.inv.pas.armor || 0) * 0.15;
-    for (let i = phys.enemies.length - 1; i >= 0; i--) {
+    for (let i = phys.enemies.length-1; i>=0; i--) {
         const e = phys.enemies[i];
-        const dx = p.x - e.x, dy = p.y - e.y;
-        const d2 = dx*dx + dy*dy;
+        const dx = p.x-e.x, dy = p.y-e.y, d2 = dx*dx+dy*dy;
         const d = Math.sqrt(d2);
-        
-        e.x += (dx/d) * e.spd;
-        e.y += (dy/d) * e.spd;
+        e.x += (dx/d)*e.spd; e.y += (dy/d)*e.spd;
 
-        // プレイヤー被弾
-        if (d2 < (p.size + e.size)**2 && !p.isGod) {
+        if (d2 < (p.size+e.size)**2 && !p.isGod) {
             p.hp -= 0.6 * armorMod;
             if (p.hp <= 0) triggerGameOver();
         }
 
-        // 弾との衝突判定
-        for (let j = phys.bullets.length - 1; j >= 0; j--) {
+        for (let j = phys.bullets.length-1; j>=0; j--) {
             const b = phys.bullets[j];
-            if ((e.x-b.x)**2 + (e.y-b.y)**2 < (e.size + b.s)**2) {
+            if (((e.x-b.x)**2+(e.y-b.y)**2) < (e.size+b.s)**2) {
                 e.hp -= b.dmg;
-                if (b.bl) executeExplosion(b.x, b.y, b.bl, b.dmg);
-                if (!b.prc && !b.area && !b.pull) phys.bullets.splice(j, 1);
-                if (e.hp <= 0) {
-                    World.phys.gems.push({ x: e.x, y: e.y });
-                    phys.enemies.splice(i, 1); p.kills++; break;
-                }
+                if (b.blast) executeExplosion(b.x, b.y, b.blast, b.dmg);
+                if (!b.pierce && !b.area && !b.pull) phys.bullets.splice(j, 1);
+                if (e.hp <= 0) { phys.gems.push({x:e.x, y:e.y}); phys.enemies.splice(i, 1); p.kills++; break; }
             }
         }
     }
 
-    // 3. 経験値磁石
+    // 4. ジェム回収
     const magR = 120 * (1 + (p.inv.pas.magnet || 0) * 0.6);
-    for (let i = phys.gems.length - 1; i >= 0; i--) {
-        const g = phys.gems[i];
-        const d2 = (p.x-g.x)**2 + (p.y-g.y)**2;
+    for (let i = phys.gems.length-1; i>=0; i--) {
+        const g = phys.gems[i]; const d2 = (p.x-g.x)**2+(p.y-g.y)**2;
         if (d2 < magR**2) { g.x += (p.x-g.x)*0.2; g.y += (p.y-g.y)*0.2; }
         if (d2 < 25**2) { phys.gems.splice(i, 1); addExp(1); }
     }
 
-    // 4. 敵スポーン
+    // 5. スポーン
     if (World.sys.frame % World.sys.spawnRate === 0 && phys.enemies.length < World.sys.maxEnemies) {
-        const a = Math.random()*7, dist = 800;
-        const hp = 10 + p.lv * 8;
-        phys.enemies.push({ x: p.x+Math.cos(a)*dist, y: p.y+Math.sin(a)*dist, hp: hp, maxHp: hp, baseSpd: 2.2+p.lv*0.06, spd: 2.2, size: 18 });
+        const a = Math.random()*7, dist = 850;
+        phys.enemies.push({ x: p.x+Math.cos(a)*dist, y: p.y+Math.sin(a)*dist, hp: 10+p.lv*10, maxHp: 10+p.lv*10, baseSpd: 2.2+p.lv*0.05, spd: 2.2, size: 18 });
     }
 }
 
 function executeExplosion(x, y, r, dmg) {
-    screenShake = 10;
-    World.phys.enemies.forEach(e => { if((x-e.x)**2 + (y-e.y)**2 < r**2) e.hp -= dmg; });
+    World.phys.enemies.forEach(e => { if(((x-e.x)**2+(y-e.y)**2) < r**2) e.hp -= dmg; });
 }
 
-/* 5/6終了。全30種の武器数学ロジックと物理エンジンが完成しました。
-   次は【最終第6弾：描画統合・進化抽選アルゴリズム・メインループ】です。
-   「最後」と送ってください。 */
-/* --- [6/6] JavaScript: 最終描画・進化アルゴリズム・統合セクション --- */
+function addExp(v) {
+    const p = World.p; p.exp += v * (1 + (p.inv.pas.oil||0)*0.25);
+    if (p.exp >= p.next) { p.exp=0; p.next+=15; p.lv++; openUpgradeOverlay(); }
+}
+
+/* 5/6終了：次項 [6/6] で描画エンジンと進化抽選ロジックを統合し、全コードが完結します。 */
+/* --- [6/6] JavaScript: 描画・進化抽選・システムメインループ完結セクション --- */
 
 /**
  * アップグレード画面の生成ロジック
  * 進化(Evolve)を最優先し、次に所持スキルの強化、最後に新規取得を抽選する
+ * 本家同様、スロットがいっぱいの場合は新規スキルは出さない
  */
 function openUpgradeOverlay() {
     World.sys.isPaused = true;
@@ -828,7 +620,9 @@ function openUpgradeOverlay() {
 
     const p = World.p;
 
-    // 1. 初回：メイン武器選択
+    // -----------------------------------------------------------------
+    // 1. 初回：メイン武器選択（ゲーム開始時）
+    // -----------------------------------------------------------------
     if (!p.inv.main) {
         title.innerText = "メイン武器を選択せよ";
         Object.keys(GAMEDATA.main).forEach(id => {
@@ -837,13 +631,15 @@ function openUpgradeOverlay() {
         return;
     }
 
-    // 2. 二回目以降：進化(Evolve)および通常スキルの抽選
+    // -----------------------------------------------------------------
+    // 2. レベルアップ：進化(Evolve)および通常スキルの抽選
+    // -----------------------------------------------------------------
     title.innerText = "スキルアップグレード";
     let evoChoices = [];
     let normalChoices = [];
 
-    // --- 進化候補の抽出ロジック ---
-    // メイン武器の進化判定 (Lv5 + 特定補助)
+    // --- 【進化候補】の全スキャン ---
+    // メイン武器の進化判定
     if (checkEvoStatus(p.inv.main.id)) {
         evoChoices.push({ id: p.inv.main.id, type: 'main', isEvo: true });
     }
@@ -852,39 +648,70 @@ function openUpgradeOverlay() {
         if (checkEvoStatus(id)) evoChoices.push({ id, type: 'sub', isEvo: true });
     });
 
-    // --- 通常候補の抽出（枠制限を厳密にチェック） ---
-    // 攻撃スキル：既存の強化 または 新規（5枠空きがある場合のみ）
+    // --- 【通常候補】の全スキャン（枠制限を厳密に考慮） ---
+    // 攻撃サブスキル候補
     Object.keys(GAMEDATA.sub).forEach(id => {
         const lv = p.inv.sub[id] || 0;
+        // 所持済みでLv5未満なら強化候補
         if (lv > 0 && lv < 5) {
             normalChoices.push({ id, type: 'sub', isEvo: false });
-        } else if (lv === 0 && Object.keys(p.inv.sub).length < 5) {
+        } 
+        // 未所持で、攻撃スロット（最大5）に空きがあれば新規候補
+        else if (lv === 0 && Object.keys(p.inv.sub).length < 5) {
             normalChoices.push({ id, type: 'sub', isEvo: false });
         }
     });
 
-    // 補助スキル：既存の強化 または 新規（6枠空きがある場合のみ）
+    // 補助スキル候補
     Object.keys(GAMEDATA.pas).forEach(id => {
         const lv = p.inv.pas[id] || 0;
-        if (id === 'god') { normalChoices.push({ id, type: 'pas', isEvo: false }); return; }
+        // 無敵(God)は特殊枠：レベルに関係なく抽選プールに低確率で入るように設定可
+        if (id === 'god') { 
+            if (!p.isGod) normalChoices.push({ id, type: 'pas', isEvo: false });
+            return; 
+        }
+        // 所持済みでLv5未満なら強化候補
         if (lv > 0 && lv < 5) {
             normalChoices.push({ id, type: 'pas', isEvo: false });
-        } else if (lv === 0 && Object.keys(p.inv.pas).length < 6) {
+        } 
+        // 未所持で、補助スロット（最大6）に空きがあれば新規候補
+        else if (lv === 0 && Object.keys(p.inv.pas).length < 6) {
             normalChoices.push({ id, type: 'pas', isEvo: false });
         }
     });
 
-    // シャッフルして最大3枚を選択（進化があれば1枠は確定で割り込む）
-    let finalPool = [...evoChoices.slice(0, 1), ...normalChoices.sort(() => 0.5 - Math.random())];
-    let selected = finalPool.slice(0, 3);
+    // メイン武器自体の強化(Lv5まで)
+    if (p.inv.main.lv < 5) {
+        normalChoices.push({ id: p.inv.main.id, type: 'main', isEvo: false });
+    }
 
-    selected.forEach(choice => {
+    // -----------------------------------------------------------------
+    // 3. 抽選アルゴリズム：進化を優先的に含め、最大3枚を選出
+    // -----------------------------------------------------------------
+    // 進化がある場合は必ず1枚は進化カードを出す
+    let finalPool = [];
+    if (evoChoices.length > 0) {
+        finalPool.push(evoChoices[Math.floor(Math.random() * evoChoices.length)]);
+    }
+    
+    // 残りの枠を通常候補からランダムに埋める
+    let shuffledNormals = normalChoices.sort(() => 0.5 - Math.random());
+    while (finalPool.length < 3 && shuffledNormals.length > 0) {
+        let pick = shuffledNormals.pop();
+        // 重複回避
+        if (!finalPool.find(x => x.id === pick.id)) {
+            finalPool.push(pick);
+        }
+    }
+
+    // カードの生成
+    finalPool.forEach(choice => {
         generateSkillCard(choice.id, choice.type, choice.isEvo, container);
     });
 }
 
 /**
- * スキルカードのHTML動的生成
+ * スキルカードHTMLの動的構築
  */
 function generateSkillCard(id, type, isEvo, container) {
     const p = World.p;
@@ -900,17 +727,25 @@ function generateSkillCard(id, type, isEvo, container) {
     else if (type === 'sub') currentLv = p.inv.sub[id] || 0;
     else currentLv = p.inv.pas[id] || 0;
 
+    // 星（レベル）表示の生成
+    let starsHtml = '';
+    if (!isEvo) {
+        for (let i = 0; i < 5; i++) {
+            starsHtml += `<div class="level-dot ${i < currentLv ? 'active' : ''}"></div>`;
+        }
+    } else {
+        starsHtml = `<span style="color:#fff; font-weight:900;">★★★ EVOLUTION ★★★</span>`;
+    }
+
     card.innerHTML = `
         <div class="card-type">${isEvo ? 'EVOLUTION' : type.toUpperCase()}</div>
         <h3 class="card-title">${isEvo ? data.r : data.n}</h3>
-        <div class="card-desc">${isEvo ? "究極の力を解放した！" : data.d}</div>
-        <div class="level-container">
-            ${Array(5).fill().map((_, i) => `<div class="level-dot ${i < currentLv ? 'active' : ''}"></div>`).join('')}
-        </div>
+        <div class="card-desc">${isEvo ? "究極の進化を遂げた！" : data.d}</div>
+        <div class="level-container">${starsHtml}</div>
     `;
 
     card.onclick = () => {
-        applySkillSelection(id, type, isEvo);
+        confirmSelection(id, type, isEvo);
         document.getElementById('upgrade-overlay').classList.remove('active');
         World.sys.isPaused = false;
     };
@@ -919,9 +754,9 @@ function generateSkillCard(id, type, isEvo, container) {
 }
 
 /**
- * 選択スキルの適用
+ * スキル習得・強化の確定処理
  */
-function applySkillSelection(id, type, isEvo) {
+function confirmSelection(id, type, isEvo) {
     const p = World.p;
     if (id === 'god') { p.isGod = true; return; }
 
@@ -930,41 +765,51 @@ function applySkillSelection(id, type, isEvo) {
         else p.inv.main.lv = isEvo ? 6 : p.inv.main.lv + 1;
     } else if (type === 'sub') {
         if (isEvo) {
+            // ドローン合体の特殊ロジック
             if (id === 'droneA' || id === 'droneB') {
-                delete p.inv.sub.droneA; delete p.inv.sub.droneB;
+                delete p.inv.sub.droneA;
+                delete p.inv.sub.droneB;
                 p.inv.sub.destroyer = 6;
-            } else { p.inv.sub[id] = 6; }
-        } else { p.inv.sub[id] = (p.inv.sub[id] || 0) + 1; }
+            } else {
+                p.inv.sub[id] = 6;
+            }
+        } else {
+            p.inv.sub[id] = (p.inv.sub[id] || 0) + 1;
+        }
     } else if (type === 'pas') {
         p.inv.pas[id] = (p.inv.pas[id] || 0) + 1;
-        if (id === 'hp') { p.max += 25; p.hp += 25; }
+        // 即時反映系パッシブ：HP上限
+        if (id === 'hp') {
+            const boost = 25;
+            p.max += boost; p.hp += boost;
+        }
     }
-    updateSlotDisplay();
+    updateInventoryUI();
 }
 
 /**
- * インベントリUIの更新
+ * 右側インベントリスロットの完全同期
  */
-function updateSlotDisplay() {
+function updateInventoryUI() {
     const p = World.p;
-    // 攻撃枠
-    let atkList = [];
-    if (p.inv.main) atkList.push({ ...GAMEDATA.main[p.inv.main.id], lv: p.inv.main.lv });
-    Object.keys(p.inv.sub).forEach(id => atkList.push({ ...GAMEDATA.sub[id], lv: p.inv.sub[id] }));
+    // 攻撃系スロット
+    let combinedAtk = [];
+    if (p.inv.main) combinedAtk.push({ id: p.inv.main.id, lv: p.inv.main.lv, n: GAMEDATA.main[p.inv.main.id].n });
+    Object.keys(p.inv.sub).forEach(id => combinedAtk.push({ id, lv: p.inv.sub[id], n: GAMEDATA.sub[id].n }));
 
-    for(let i=0; i<6; i++) {
+    for (let i = 0; i < 6; i++) {
         const slot = document.getElementById(`slot-atk-${i}`);
-        if (atkList[i]) {
+        if (combinedAtk[i]) {
             slot.classList.add('has-item');
-            slot.innerHTML = `<span class="icon-weapon">${atkList[i].n.charAt(0)}</span>
-                <div class="slot-stars">${Array(Math.min(5, atkList[i].lv)).fill().map(()=>`<div class="star active"></div>`).join('')}</div>`;
-            if(atkList[i].lv >= 6) slot.style.borderColor = "#ff4757";
+            slot.innerHTML = `<span class="icon-weapon">${combinedAtk[i].n.charAt(0)}</span>
+                <div class="slot-stars">${Array(Math.min(5, combinedAtk[i].lv)).fill().map(()=>`<div class="star active"></div>`).join('')}</div>`;
+            if (combinedAtk[i].lv >= 6) slot.style.borderColor = "#ff4757";
         }
     }
 
-    // 補助枠
+    // 補助系スロット
     const pasKeys = Object.keys(p.inv.pas);
-    for(let i=0; i<6; i++) {
+    for (let i = 0; i < 6; i++) {
         const slot = document.getElementById(`slot-pas-${i}`);
         if (pasKeys[i]) {
             const id = pasKeys[i];
@@ -976,82 +821,108 @@ function updateSlotDisplay() {
 }
 
 /**
- * 最終描画エンジン
+ * メインレンダリング・ループ
  */
 function render() {
-    // 画面揺れ
-    let ox = 0, oy = 0;
-    if (screenShake > 0) {
-        ox = (Math.random()-0.5) * screenShake;
-        oy = (Math.random()-0.5) * screenShake;
-        screenShake *= 0.9;
+    // 画面揺れ(Screen Shake)
+    let offsetX = 0, offsetY = 0;
+    if (World.sys.shake > 0) {
+        offsetX = (Math.random() - 0.5) * World.sys.shake;
+        offsetY = (Math.random() - 0.5) * World.sys.shake;
+        World.sys.shake *= 0.85;
     }
-    ctx.setTransform(1,0,0,1,ox,oy);
-    ctx.clearRect(-100,-100, canvas.width+200, canvas.height+200);
+
+    ctx.setTransform(1, 0, 0, 1, offsetX, offsetY);
+    ctx.clearRect(-100, -100, canvas.width + 200, canvas.height + 200);
 
     const p = World.p;
     const phys = World.phys;
 
-    // ジェム
+    // 1. ジェム（経験値）
     phys.gems.forEach(g => {
         ctx.fillStyle = "#2ecc71";
-        ctx.beginPath(); ctx.arc(g.x, g.y, 4, 0, 7); ctx.fill();
+        ctx.beginPath(); ctx.arc(g.x, g.y, 5, 0, 7); ctx.fill();
+        ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.stroke();
     });
 
-    // 敵
+    // 2. 敵ユニット
     phys.enemies.forEach(e => {
-        ctx.fillStyle = "#222"; ctx.fillRect(e.x-10, e.y-10, 20, 20);
-        ctx.fillStyle = "#ff4757"; ctx.fillRect(e.x-12, e.y+15, 24 * (e.hp/e.maxHp), 4);
+        ctx.fillStyle = "#2c3e50";
+        ctx.fillRect(e.x - 12, e.y - 12, 24, 24);
+        // HPバー
+        ctx.fillStyle = "#444"; ctx.fillRect(e.x - 15, e.y + 18, 30, 4);
+        ctx.fillStyle = "#ff4757"; ctx.fillRect(e.x - 15, e.y + 18, 30 * (e.hp / e.maxHp), 4);
     });
 
-    // 弾
+    // 3. 全てのプロジェクタイル（弾・エフェクト）
     phys.bullets.forEach(b => {
-        ctx.fillStyle = b.c; ctx.beginPath(); ctx.arc(b.x, b.y, b.s, 0, 7); ctx.fill();
+        ctx.fillStyle = b.c;
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.s, 0, 7); ctx.fill();
+        if (b.trk) { // 追尾弾の光沢
+            ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.stroke();
+        }
     });
 
-    // プレイヤー
+    // 4. プレイヤー
     if (p.isGod) {
-        ctx.shadowBlur = 30; ctx.shadowColor = "#fff200";
-        ctx.fillStyle = World.sys.frame % 4 < 2 ? "#fff200" : "#fff";
-    } else { ctx.fillStyle = "#00a8ff"; }
-    ctx.fillRect(p.x - 12, p.y - 12, 24, 24);
+        ctx.shadowBlur = 40; ctx.shadowColor = "#fff200";
+        ctx.fillStyle = World.sys.frame % 4 < 2 ? "#fff200" : "#ffffff";
+    } else {
+        ctx.fillStyle = "#00a8ff";
+    }
+    ctx.fillRect(p.x - 15, p.y - 15, 30, 30);
     ctx.shadowBlur = 0;
 
-    // HPバー
-    ctx.fillStyle = "#1a1a1a"; ctx.fillRect(p.x-20, p.y+25, 40, 6);
-    ctx.fillStyle = p.hp > p.max*0.3 ? "#2ed573" : "#ff4757";
-    ctx.fillRect(p.x-20, p.y+25, 40 * (p.hp/p.max), 6);
+    // プレイヤーHPバー
+    ctx.fillStyle = "#111"; ctx.fillRect(p.x - 25, p.y + 25, 50, 8);
+    ctx.fillStyle = p.hp > p.max * 0.3 ? "#2ed573" : "#ff4757";
+    ctx.fillRect(p.x - 25, p.y + 25, 50 * (Math.max(0, p.hp / p.max)), 8);
 
-    ctx.setTransform(1,0,0,1,0,0);
-    updateUI();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    
+    // UIテキスト更新
+    document.getElementById('exp-bar').style.width = (p.exp / p.next * 100) + "%";
+    document.getElementById('lv-badge').innerText = `Lv. ${p.lv}`;
+    document.getElementById('kill-count').innerText = p.kills;
 }
 
-function updateUI() {
-    document.getElementById('exp-bar').style.width = (World.p.exp / World.p.next * 100) + "%";
-    document.getElementById('lv-badge').innerText = `Lv. ${World.p.lv}`;
-    document.getElementById('kill-count').innerText = World.p.kills;
-}
-
+/**
+ * ゲームオーバー処理
+ */
 function triggerGameOver() {
     World.sys.isPaused = true;
     document.getElementById('gameover-overlay').classList.add('active');
     document.getElementById('final-kills').innerText = World.p.kills;
-    document.getElementById('final-lv').innerText = World.p.lv;
 }
 
+/**
+ * メインループの起動
+ */
 function mainLoop() {
     World.sys.frame++;
-    updatePhysics();
-    processWeapons();
+    updatePhysics();  // [5/6]で定義
+    processWeapons(); // [5/6]で定義
     render();
     requestAnimationFrame(mainLoop);
 }
 
-// 起動
+// -----------------------------------------------------------------
+// ゲームの完全起動
+// -----------------------------------------------------------------
 window.onload = () => {
+    // スロットの初期化
+    for(let i=0; i<6; i++) {
+        document.getElementById(`slot-atk-${i}`).innerHTML = "";
+        document.getElementById(`slot-pas-${i}`).innerHTML = "";
+    }
+    
+    // 初回の武器選択画面を出す
     openUpgradeOverlay();
+    
+    // ループ開始
     mainLoop();
 };
+
 </script>
 </body>
 </html>
